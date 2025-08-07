@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Collection;
 use App\Models\AgentCommission;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class RemittanceCalculator
 {
@@ -12,14 +13,19 @@ class RemittanceCalculator
         $gross = $bets->sum('amount');
         $commission = 0;
 
-        // 1. Group bets by agent_id and game_type to apply commission per rule
-        $bets->groupBy(['agent_id', 'game_type'])->each(function ($group, $agentId) use (&$commission) {
+        // Preload all commission rates into a key-value map
+        $commissionRates = AgentCommission::whereIn('agent_id', $bets->pluck('agent_id')->unique())
+            ->whereIn('game_type', $bets->pluck('game_type')->unique())
+            ->get()
+            ->keyBy(fn($row) => $row->agent_id . '-' . $row->game_type)
+            ->toArray(); // force to array
+
+
+        $bets->groupBy(['agent_id', 'game_type'])->each(function ($group, $agentId) use (&$commission, $commissionRates) {
             foreach ($group as $gameType => $betsGroup) {
-                // Fetch commission percent from agent_commissions table
-                $percent = AgentCommission::where('agent_id', $agentId)
-                    ->where('game_type', $gameType)
-                    ->value('commission_percent') ?? 0.10; // fallback to 10% if not set
-                $percent = $percent / 100;
+                $key = $agentId . '-' . $gameType;
+                $rate = isset($commissionRates[$key]) ? $commissionRates[$key]['commission_percent'] : 0; // fallback, log if needed
+                $percent = $rate / 100;
                 $groupGross = $betsGroup->sum('amount');
                 $commission += $groupGross * $percent;
             }
@@ -49,6 +55,18 @@ class RemittanceCalculator
             'final' => round($manualOverride ?? max($computed, 0), 2),
         ];
     }
+
+    public static function getCommissionRate($agentId, $gameType)
+    {
+        $rate = DB::table('agent_commission')
+            ->where('agent_id', $agentId)
+            ->where('game_type', $gameType)
+            ->value('commission_percent');
+
+        return $rate ?? 0; 
+    }
+
+
 
 }
 

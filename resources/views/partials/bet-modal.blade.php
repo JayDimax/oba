@@ -84,9 +84,9 @@
 </div>
 
 <!-- Open Modal Button -->
-<button id="open-bet-modal" class="py-2 px-4 text-base font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition self-start whitespace-nowrap">
+{{-- <button id="open-bet-modal" class="py-2 px-4 text-base font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition self-start whitespace-nowrap">
   Add Bet
-</button>
+</button> --}}
 
 <!-- Dashboard Gross Display -->
 <div id="dashboard-gross" class="mt-4 text-lg font-bold"></div>

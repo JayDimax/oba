@@ -82,7 +82,7 @@
           </span>
         </h2>
 
-
+ 
         <div class="space-y-1 text-sm">
           <div class="flex justify-between"><span>Gross Sales:</span><span>{{ number_format($summary['gross'], 2) }}</span></div>
           <div class="flex justify-between"><span>Hits:</span><span>{{ number_format($summary['hits'], 2) }}</span></div>

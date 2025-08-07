@@ -7,21 +7,24 @@ use App\Models\Bet;
 use App\Models\User;
 use App\Models\Agent;
 use App\Models\Result;
-use App\Models\Deduction; 
+use Carbon\CarbonPeriod;
 use App\Models\Collection;
+use App\Models\Deduction; 
 use App\Models\AgentBalance;
-use App\Models\CollectionStub;
 use Illuminate\Http\Request;
+use App\Models\CollectionStub;
+use App\Models\AgentCommission;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Services\RemittanceCalculator;
-use Carbon\CarbonPeriod;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+
 class DashboardController extends Controller
 {
     public function admin(Request $request)
     {
+        
         /** ─────────────────────────────────────────────
          *  1. BASE DATES & FILTER INPUTS
          *  ────────────────────────────────────────────*/
@@ -47,28 +50,56 @@ class DashboardController extends Controller
             ->when($agentName, fn($q) => $q->whereHas('betAgent', fn($subQ) =>
                 $subQ->where('name', 'like', "%{$agentName}%")
             ));
+        $bets = $betsQuery->orderByDesc('created_at')->paginate(10); 
+
+
+
+
         // Clone query to avoid interfering with pagination or .get()------------->>>>>>>>>>
         $filteredBets = (clone $betsQuery)->get();
         $filteredGross = $filteredBets->sum('amount');
-        $filteredCommission = $filteredBets->sum(function ($bet) {
-            return $bet->is_winner ? 0 : $bet->amount * 0.10;
-        });
-        $filteredWinnings = $filteredBets->sum(function ($bet) {
-            return $bet->is_winner ? $bet->prize_amount ?? 0 : 0;
-        });
-        $filteredNetSales = $filteredBets->sum(function ($bet) {
+           
+        $agentId = $filteredBets->first()->agent_id ?? null;
+        // First, preload commission rates into a key-value pair: [game_type => rate]
+        $commissionRate = AgentCommission::where('agent_id', $agentId)
+            ->pluck('commission_percent', 'game_type') // returns a collection like ['L2' => 0.1, 'S3' => 0.08, etc.]
+            ->toArray();
+
+        // Compute Commission
+        $filteredCommission = $filteredBets->sum(function ($bet) use ($commissionRate) {
             if ($bet->is_winner) {
-                return $bet->amount - $bet->prize_amount + 0; // commission excluded
+                return 0;
+            }
+
+            $rate = $commissionRate[$bet->game_type] ?? 0; // fallback if not found
+            return $bet->amount * $rate;
+        });
+
+
+
+        $filteredWinnings = $filteredBets->sum(function ($bet) {
+            return $bet->is_winner ? $bet->winnings ?? 0 : 0;
+        });
+
+        // Adjust net sales calculation:
+        $filteredNetSales = $filteredBets->sum(function ($bet) use ($commissionRate) {
+            $rate = $commissionRate[$bet->game_type] ?? 0; // Default to 0 if missing
+
+            if ($bet->is_winner) {
+                // Net is amount minus winnings (no commission)
+                return $bet->amount - $bet->winnings;
             } else {
-                return $bet->amount - ($bet->amount * 0.10);
+                // Net is amount minus commission
+                return $bet->amount - ($bet->amount * $rate);
             }
         });
+
         $filteredGross      = $filteredTotals->gross ?? 0;
         $filteredCommission = $filteredTotals->commission ?? 0;
         $filteredNetSales   = $filteredTotals->net_sales ?? 0;
         //------------------------------------------------>>>>>>>
 
-       $bets = $betsQuery->orderByDesc('created_at')->paginate(10); // 20 rows per page
+       // 20 rows per page
 
 
 
@@ -149,9 +180,10 @@ class DashboardController extends Controller
           if ($request->has('print')) {
                 return view('admin.bets-print', compact('bets', 'request'));
             }
-        /** ─────────────────────────────────────────────
-         *  5. PASS TO VIEW
-         *  ────────────────────────────────────────────*/
+        $l2Gross = $filteredBets->where('game_type', 'L2')->sum('amount');
+        $s3Gross = $filteredBets->where('game_type', 'S3')->sum('amount');
+        $d4Gross = $filteredBets->where('game_type', '4D')->sum('amount');
+
         return view('admin.dashboard', compact(
             // headline
             'todaySummary',
@@ -161,7 +193,9 @@ class DashboardController extends Controller
             'deficit',
             'netSales',
             'allResults',
-
+            'l2Gross',
+            's3Gross',
+            'd4Gross',
             // stats
             'totalAgents',
             'activeAgents',
@@ -179,7 +213,6 @@ class DashboardController extends Controller
             'topCombinations',
             'agents',
    
-          
             // filtered totals (new)
             'filteredGross',
             'filteredCommission',
@@ -190,6 +223,27 @@ class DashboardController extends Controller
         ));
 
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     public function exportBets(Request $request)
     {
@@ -330,92 +384,102 @@ class DashboardController extends Controller
                 ->orderByDesc('created_at')
                 ->get()
                 ->keyBy('stub_id');
-    
-            //calendar
-            //calendar
-    $today = today();
-    $from = $request->input('from_date', $today->toDateString());
-    $to = $request->input('to_date', $today->toDateString());
-    $drawFilter = $request->input('draw_time', 'ALL');
-    $agentName = $request->input('agent_name');
 
-    $drawMap = ['2PM' => '14', '5PM' => '17', '9PM' => '21'];
-    $drawTimeValue = $drawFilter !== 'ALL' && isset($drawMap[$drawFilter])
-        ? $drawMap[$drawFilter]
-        : null;
+            // Set current month start and today
+            $startOfMonth = now()->startOfMonth();
+            $today = now();
 
-    $betsQuery = Bet::with('agent.user')
-        ->whereBetween('game_date', [$from, $to])
-        ->when($drawTimeValue, fn($q) => $q->where('game_draw', $drawTimeValue))
-        ->when($agentName, fn($q) => $q->whereHas('betAgent', fn($subQ) =>
-            $subQ->where('name', 'like', "%{$agentName}%")
-        ));
+            $dataRangeStart = $startOfMonth->toDateString();
+            $dataRangeEnd = $today->toDateString();
 
-    $filteredBets = $betsQuery->get();
+            // Filters
+            $drawFilter = $request->input('draw_time', 'ALL');
+            $agentName = $request->input('agent_name');
 
-    // Group by game_date (date only)
-    $dailySummaryMap = $filteredBets
-        ->groupBy(fn($bet) => Carbon::parse($bet->game_date)->toDateString())
-        ->map(function ($bets, $date) {
-            $gross = $bets->sum('amount');
-            $commission = $bets->sum(fn($bet) => $bet->is_winner ? 0 : $bet->amount * 0.10);
-            $winnings = $bets->sum(fn($bet) => $bet->is_winner ? $bet->winnings ?? 0 : 0);
-            $netSales = $gross - $commission - $winnings; // netSales calculated as gross - commission - winnings
+            $drawMap = ['2PM' => '14', '5PM' => '17', '9PM' => '21'];
+            $drawTimeValue = $drawFilter !== 'ALL' && isset($drawMap[$drawFilter])
+                ? $drawMap[$drawFilter]
+                : null;
 
-            return [
-                'date' => $date,
-                'gross' => $gross,
-                'commission' => $commission,
-                'winnings' => $winnings,
-                'netSales' => $netSales,
-            ];
-        });
+            // Query only up to today
+            $betsQuery = Bet::with('agent.user')
+                ->whereBetween('game_date', [$dataRangeStart, $dataRangeEnd])
+                ->when($drawTimeValue, fn($q) => $q->where('game_draw', $drawTimeValue))
+                ->when($agentName, fn($q) => $q->whereHas('betAgent', fn($subQ) =>
+                    $subQ->where('name', 'like', "%{$agentName}%")
+                ));
 
-    // Generate all dates in range
-        $period = CarbonPeriod::create($from, $to);
+            $filteredBets = $betsQuery->get();
 
-        $calendarIncome = [];
+            $commissionRates = DB::table('agent_commissions')
+            ->select('agent_id', 'game_type', 'commission_percent')
+            ->get()
+            ->keyBy(fn($row) => $row->agent_id . '_' . $row->game_type);
 
-        foreach ($period as $date) {
-            $dateStr = $date->toDateString();
-            $data = $dailySummaryMap->get($dateStr);
+            // Group by game_date
 
-            $gross = $data['gross'] ?? 0;
-            $commission = $data['commission'] ?? 0;
-            $winnings = $data['winnings'] ?? 0;
-            $netSales = $data['netSales'] ?? 0;
 
-            $calendarIncome[] = [
-                'title' => '₱' . number_format($netSales, 2),
-                'start' => $dateStr,
-                'extendedProps' => [
-                    'gross' => $gross,
-                    'commission' => $commission,
-                    'winnings' => $winnings,
-                ],
-            ];
-        }
+            $dailySummaryMap = $filteredBets
+                ->groupBy(fn($bet) => Carbon::parse($bet->game_date)->toDateString())
+                ->map(function ($bets, $date) {
+                    // Step 1: Fetch commission rates for involved agents and game types
+                    $commissionRates = DB::table('agent_commissions')
+                        ->whereIn('agent_id', $bets->pluck('agent_id')->unique())
+                        ->whereIn('game_type', $bets->pluck('game_type')->unique())
+                        ->get()
+                        ->keyBy(fn($item) => $item->agent_id . '-' . $item->game_type);
 
-        // Keep your existing grossPerDay and netPerDay if you want
-        $grossPerDay = DB::table('bets')
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('SUM(amount) as gross'))
-            ->groupBy('date')
-            ->pluck('gross', 'date');
+                    // Step 2: Compute values
+                    $gross = $bets->sum('amount');
 
-        $netPerDay = DB::table('collections')
-            ->select(DB::raw('DATE(created_at) as date'), DB::raw('SUM(net_remit) as net'))
-            ->groupBy('date')
-            ->pluck('net', 'date');
+                    $commission = $bets->sum(function ($bet) use ($commissionRates) {
+                        if ($bet->is_winner) return 0;
 
-        $calendarData = [];
+                        $key = $bet->agent_id . '-' . $bet->game_type;
+                        $percent = $commissionRates[$key]->commission_percent ?? 10; // fallback to 10% if not found
 
-        $dates = array_unique(array_merge($grossPerDay->keys()->toArray(), $netPerDay->keys()->toArray()));
-        foreach ($dates as $date) {
-            $calendarData[$date] = [
-                'gross' => $grossPerDay[$date] ?? 0,
-                'net' => $netPerDay[$date] ?? 0,
-            ];
-        }
+                        return $bet->amount * ($percent / 100);
+                    });
+
+                    $winnings = $bets->sum(fn($bet) => $bet->is_winner ? ($bet->winnings ?? 0) : 0);
+                    $netSales = $gross - $commission - $winnings;
+
+                    return [
+                        'date' => $date,
+                        'gross' => $gross,
+                        'commission' => $commission,
+                        'winnings' => $winnings,
+                        'netSales' => $netSales,
+                    ];
+                });
+
+
+
+                // Loop from August 1 to today only
+                $period = CarbonPeriod::create($startOfMonth, $today);
+                $calendarIncome = [];
+
+                foreach ($period as $date) {
+                    $dateStr = $date->toDateString();
+                    $data = $dailySummaryMap->get($dateStr);
+
+                    // Skip if no data or all values are zero
+                    if (!$data || ($data['gross'] == 0 && $data['netSales'] == 0)) {
+                        continue;
+                    }
+
+                    $calendarIncome[] = [
+                        'title' => '₱' . number_format($data['netSales'], 2),
+                        'start' => $dateStr,
+                        'extendedProps' => [
+                            'gross' => $data['gross'],
+                            'commission' => $data['commission'],
+                            'winnings' => $data['winnings'],
+                        ],
+                    ];
+                }
+                $grossPerDay = $dailySummaryMap->map(fn($data) => $data['gross'])->all();
+                $netPerDay = $dailySummaryMap->map(fn($data) => $data['netSales'])->all();
 
 
 
@@ -432,17 +496,12 @@ class DashboardController extends Controller
             'representativeBets' => $representativeBets,
             'startDate' => $filterDate,
             'filterStubId' => $filterStubId,
-            //calendar
             'calendarIncome' => $calendarIncome,
-            'from' => $from,
-            'to' => $to,
             'drawFilter' => $drawFilter,
             'agentName' => $agentName,
-            'calendarData' => $calendarData,
             'grossPerDay' => $grossPerDay,
             'netPerDay' => $netPerDay,
-          
-
+            'data' => $reportData,
         ]);
     }
 

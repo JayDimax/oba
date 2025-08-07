@@ -44,26 +44,27 @@
   </div>
 
 
-  @if (!$hasResults)
-    <div class="bg-yellow-50 dark:bg-gray-700 text-yellow-800 dark:text-yellow-200 border-l-4 border-yellow-400 p-4 rounded shadow-sm">
-        <div class="font-semibold text-sm">Waiting for Results</div>
-        <div class="text-xs text-gray-600 dark:text-gray-300 mt-1">
-            Draw results (2PM, 5PM, 9PM) are not yet declared for this date. Remittance summary will be shown once results are available.
-        </div>
+@if ($hasResults)
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border-l-4 border-blue-600 mt-4">
+    <div class="text-xs uppercase text-gray-500 dark:text-gray-300 mb-1 font-semibold">
+        Overall Remittance for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}
     </div>
-  @else
-    <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border-l-4 border-blue-600 mt-4">
-      <div class="text-xs uppercase text-gray-500 dark:text-gray-300 mb-1 font-semibold">
-          Overall Remittance for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}
-      </div>
-      <div class="text-2xl font-bold text-blue-600 dark:text-blue-300">
-          ₱{{ number_format($overallRemittance, 2) }}
-      </div>
-      <div class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
-          Computed after all game draw results were declared.
-      </div>
+    <div class="text-2xl font-bold text-blue-600 dark:text-blue-300">
+        ₱{{ number_format($netRemittedAmount, 2) }}
+    </div>
+    <div class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
+        Computed after all game draw results were declared.
+    </div>
+
+    <div class="mt-3 text-sm text-gray-600 dark:text-gray-300">
+        <div>Gross Sales: <strong>₱{{ number_format($liveNetRemitBreakdown['gross'], 2) }}</strong></div>
+        <div>Commission: <strong>₱{{ number_format($liveNetRemitBreakdown['commission'], 2) }}</strong></div>
+        <div>Payouts: <strong>₱{{ number_format($liveNetRemitBreakdown['payouts'], 2) }}</strong></div>
+        <div>Projected Income: <strong>₱{{ number_format($liveNetRemitBreakdown['projected_income'], 2) }}</strong></div>
+    </div>
   </div>
 @endif
+
 
   {{-- Feedback Alerts --}}
   @if (session('success'))

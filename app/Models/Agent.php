@@ -48,9 +48,9 @@ public function deductions()
     return $this->hasMany(Deduction::class, 'agent_id');
 }
 
-public function commission()
+public function commissions()
 {
-    return $this->hasOne(AgentCommission::class);
+    return $this->hasMany(AgentCommission::class);
 }
 
 

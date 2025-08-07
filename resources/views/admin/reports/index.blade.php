@@ -26,7 +26,7 @@
             Yearly
         </a>
     </div>
-
+ 
 
     {{-- Filter Form --}}
     <form action="{{ route('admin.reports.print') }}" method="GET" target="_blank" class="mt-4 text-right">
@@ -76,7 +76,7 @@
             <th class="px-4 py-2 text-center">Net Remittance</th>
             <th class="px-4 py-2 text-center">Balance</th>
             <th class="px-4 py-2 text-center">Status</th>
-        </tr>
+        </tr> 
     </thead>
     <tbody>
         @forelse ($reportData as $row)
@@ -106,16 +106,33 @@
     <div id="calendar">
     {{-- Optional summary below calendar: show gross and net by date --}}
     <div class="mt-6 grid grid-cols-2 gap-4 text-sm">
-        @foreach ($grossPerDay as $date => $gross)
-            @php
-                $net = $netPerDay[$date] ?? 0;
-            @endphp
-            <div class="p-2 border rounded bg-gray-50 dark:bg-gray-700">
-                <div class="font-semibold">{{ \Carbon\Carbon::parse($date)->format('M d, Y (D)') }}</div>
+       @php
+            use Carbon\Carbon;
+
+            $startDate = Carbon::parse(now()->startOfMonth());
+            $endDate = Carbon::parse(now());
+
+            for ($date = $startDate; $date->lte($endDate); $date->addDay()) {
+                $dateStr = $date->toDateString();
+                $gross = $grossPerDay[$dateStr] ?? 0;
+                $net = $netPerDay[$dateStr] ?? 0;
+
+                // Skip display if both are 0 or null
+                if (empty($gross) && empty($net)) {
+                    continue;
+                }
+        @endphp
+
+            <div class="p-2 border rounded bg-gray-50 dark:bg-gray-700 mb-2">
+                <div class="font-semibold">{{ $date->format('M d, Y (D)') }}</div>
                 <div><span class="text-purple-600 font-semibold">Gross:</span> ₱{{ number_format($gross, 2) }}</div>
                 <div><span class="text-green-600 font-semibold">Net:</span> ₱{{ number_format($net, 2) }}</div>
             </div>
-        @endforeach
+
+        @php
+            }
+        @endphp
+
     </div>
     </div>
 </div>
@@ -160,20 +177,32 @@ document.addEventListener('DOMContentLoaded', function () {
         initialView: 'dayGridMonth',
         events: @json($calendarIncome),
         height: 'auto',
-        eventColor: '#6b46c1',
+        eventColor: '#6b46c1', // Purple background
         eventTextColor: 'white',
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
             right: ''
         },
-        eventDidMount: function(info) {
-            const props = info.event.extendedProps;
-            info.el.setAttribute('title', `Gross: ₱${props.gross.toFixed(2)}\nCommission: ₱${props.commission.toFixed(2)}\nWinnings: ₱${props.winnings.toFixed(2)}`);
+        eventContent: function(info) {
+            const { gross, net } = {
+                gross: parseFloat(info.event.extendedProps.gross || 0),
+                net: parseFloat(info.event.title.replace(/[₱,]/g, '') || 0)
+            };
+
+            return {
+                html: `
+                    <div class="text-xs leading-tight">
+                        <div class="font-bold text-white">Net: ₱${net.toLocaleString()}</div>
+                        <div class="text-[10px] text-gray-200">Gross: ₱${gross.toLocaleString()}</div>
+                    </div>
+                `
+            };
         }
     });
     calendar.render();
 });
 </script>
+
 
 @endsection

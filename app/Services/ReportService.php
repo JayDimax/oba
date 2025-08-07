@@ -19,13 +19,21 @@ class ReportService
     protected function applyFilters($query, array $filters)
     {
         if (!empty($filters['filter_date'])) {
-            $query->whereDate('created_at', $filters['filter_date']);
+            // 🔁 Replace 'created_at' with 'game_date' if you're working with bets:
+            if ($query->getModel() instanceof \App\Models\Bet) {
+                $query->whereDate('game_date', $filters['filter_date']);
+            } else {
+                $query->whereDate('created_at', $filters['filter_date']);
+            }
         }
+
         if (!empty($filters['agent_id'])) {
             $query->where('agent_id', $filters['agent_id']);
         }
+
         return $query;
     }
+
 
     public function getBetsReport(array $filters = [])
     {

@@ -98,7 +98,7 @@
             'Hits:'                     => $summary['hits'] ?? 0,
             'Net Sales:'                => $summary['net_sales'] ?? 0,
             'Payout Coverage (Tapada):' => $summary['payouts'] ?? 0,
-            'Commission (10%):'         => $summary['commission_base'] ?? 0,
+            'Commission:'         => $summary['commission_base'] ?? 0,
             'Incentives:'              => $summary['incentives'] ?? 0,
         ];
 

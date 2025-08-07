@@ -252,7 +252,7 @@ class AgentController extends Controller
         ->orderByDesc('updated_at')
         ->first();
 
-        $commissionRate = ($commissionRecord?->commission_percent ?? 0.10) ;
+        $commissionRate = ($commissionRecord?->commission_percent ?? 0) ;
     
         
         // Apply draw filter if tab is selected
@@ -477,6 +477,26 @@ class AgentController extends Controller
         $cashier = $agent->cashier;
         $date = $request->input('date', now()->toDateString());
 
+        // Load agent
+      
+
+        // Fetch all stubs collected (remitted) by this agent on the selected date
+        $collections = Collection::with('stubs')
+            ->where('agent_id', $agent)
+            ->whereDate('created_at', $date)
+            ->get();
+
+        // Flatten all stubs across all collections for this date
+        $allStubIds = $collections->flatMap(function ($collection) {
+            return $collection->stubs->pluck('id');
+        });
+
+        // Get all bets related to the remitted stubs
+        $bets = Bet::whereIn('stub_id', $allStubIds)->get();
+
+        // Calculate remittance using your existing calculator service
+        $remit = \App\Services\RemittanceCalculator::computeNetRemit($bets);
+
         // Get approved collections
         $approvedCollections = \App\Models\Collection::with('collectionStubs.bets')
             ->where('agent_id', $agent->id)
@@ -487,7 +507,16 @@ class AgentController extends Controller
             ->whereDate('collection_date', $date)
             ->orderByDesc('collection_date')
             ->get();
+            
+        $netRemittedAmount = 0;
 
+            foreach ($approvedCollections as $collection) {
+                foreach ($collection->collectionStubs as $stub) {
+                    foreach ($stub->bets as $bet) {
+                        $netRemittedAmount += RemittanceCalculator::computeNetRemit($bet);
+                    }
+                }
+            }
         // Get collections (pending + approved)
         $collections = \App\Models\Collection::where('agent_id', $agent->id)
             ->whereIn('status', ['pending', 'approved'])
@@ -549,11 +578,23 @@ class AgentController extends Controller
         // Compute netRemittedAmount from approved collections
         $netRemittedAmount = 0;
         foreach ($approvedCollections as $collection) {
+            $agent = $collection->agent;
+
             foreach ($collection->collectionStubs as $stub) {
                 foreach ($stub->bets as $bet) {
-                    $netRemittedAmount += $bet->is_winner
-                        ? $bet->amount
-                        : $bet->amount * 0.9;
+                    // Get commission rate from agent_commissions table (fallback to 0)
+                    $commissionRate = $agent->commissions()
+                        ->where('game_type', $bet->game_type)
+                        ->value('commission_percent') ?? 0;
+
+                    if ($bet->is_winner) {
+                        // Winner: agent remits full amount
+                        $netRemittedAmount += $bet->amount;
+                    } else {
+                        // Loser: agent remits amount minus their commission
+                        $commission = $bet->amount * ($commissionRate / 100);
+                        $netRemittedAmount += ($bet->amount - $commission);
+                    }
                 }
             }
         }
@@ -612,7 +653,7 @@ class AgentController extends Controller
             'cashier' => $cashier,
             'date' => $date,
             'groupedStubs' => $groupedUnsubmitted,
-            'netRemit' => $netRemittedAmount,
+            'netRemittedAmount' => $netRemittedAmount,
             'previewNetRemit' => $previewNetRemit,
             'projectedCommission' => $commission,
             'gross' => $gross,
@@ -627,8 +668,9 @@ class AgentController extends Controller
             'netRemitFromUnremitted' => $netRemitFromUnremitted,
             'liveNetRemitPreview' => $liveRemit['computed'],
             'liveNetRemitBreakdown' => $liveRemit,
-            'overallRemittance' => $overallRemittance,
             'hasResults' => $hasResults,
+            'remittanceBreakdown' => $remit, 
+            'overallRemittance' => $remit['computed'],
         ]);
     }
 

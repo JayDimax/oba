@@ -2,7 +2,32 @@
 
 @section('content')
 <div class="px-4 sm:px-6 py-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
-    <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">Admin Dashboard</h1>
+    {{-- Header and Summary --}}
+    <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            Admin Dashboard
+        </h1>
+
+        <div class="w-full md:w-1/2 lg:w-1/3 bg-gray-100 dark:bg-gray-700 p-4 rounded shadow">
+            <div class="flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800 dark:text-white">Net Sales</h2>
+                <p class="text-3xl text-yellow font-semibold text-right">
+                    ₱{{ isset($netSales) ? number_format($netSales, 2) : '0.00' }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+        {{-- Gross Sales Summary --}}
+    <div class="w-full mb-6">
+        <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded shadow">
+            <div class="text-center text-gray-800 dark:text-yellow-400 text-2xl">
+                L2 Gross: ₱{{ number_format($l2Gross ?? 0, 2) }} &nbsp;|&nbsp; 
+                S3 Gross: ₱{{ number_format($s3Gross ?? 0, 2) }} &nbsp;|&nbsp; 
+                4D Gross: ₱{{ number_format($d4Gross ?? 0, 2) }}
+            </div>
+        </div>
+    </div>
 
     {{-- Summary Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
@@ -31,7 +56,7 @@
                 <span>₱{{ isset($actualRemittance) ? number_format($actualRemittance, 2) : '0.00' }}</span>
             </div>
 
-            <div class="flex justify-between text-red-600 dark:text-red-400">
+            <div class="flex justify-between text-red-600 dark:text-yellow-400">
                 <span>Unremitted Balance:</span>
                 <span>
                     ₱{{ isset($unremittedBalance) ? number_format($unremittedBalance, 2) : '0.00' }}
@@ -47,7 +72,7 @@
             <div class="flex justify-between text-gray-800 dark:text-gray-300"><span>Total Agents:</span><span>{{ isset($totalAgents) ? $totalAgents : 'N/A'}}</span></div>
             <div class="flex justify-between text-gray-800 dark:text-gray-300"><span>Active Agents:</span><span>{{ isset($activeAgents) ? $activeAgents : 'N/A'}}</span></div>
             <div class="flex justify-between text-gray-800 dark:text-gray-300"><span>Blocked Agents:</span><span>{{ isset($blockedAgents) ? $blockedAgents : 'N/A'}}</span></div>
-            <div class="flex justify-between text-red-600 dark:text-red-400"><span>Agents With Balance:</span><span>{{ isset($agentsWithBalance) ? $agentsWithBalance : 'N/A' }}</span></div>
+            <div class="flex justify-between text-red-600 dark:text-yellow-400"><span>Agents With Balance:</span><span>{{ isset($agentsWithBalance) ? $agentsWithBalance : 'N/A' }}</span></div>
         </section>
 
             {{-- All Draws --}}
@@ -103,6 +128,9 @@
     </div>
 
 
+
+
+
     {{-- deficit --}}
     @if(isset($deficit) && $deficit > 0)
 
@@ -125,19 +153,10 @@
     {{-- Bets Report Section --}}
     <div class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow mt-10">
 
-
-        {{-- Summary --}}
-        <div class="flex justify-end mb-6">
-            <div class="w-full md:w-1/2 lg:w-1/3 bg-gray-100 dark:bg-gray-700 p-4 rounded shadow">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-xl font-bold text-gray-800 dark:text-white">Net Sales</h2>
-                    <p class="text-3xl text-yellow font-semibold text-right">₱{{ isset($netSales) ? number_format($netSales, 2) : '0:00' }}</p>
-                </div>
-            </div>
-        </div>
+ 
         {{-- Top 3 Combinations per Game Type --}}
         <div class="flex flex-col">
-            <h3 class="text-md font-bold text-center text-gray-900 dark:text-white mb-3">
+            <h3 class="text-md font-bold text-center text-gray-900 dark:text-white mb-3 ">
                 Top 3 Combinations Today
             </h3>
 
@@ -176,7 +195,7 @@
 
         <div>
             <label class="block text-gray-700 dark:text-gray-200">To Date</label>
-            <input type="date" name="to_date" value="{{ request('to_date', $to) }}"
+            <input type="date" name="to_date" value="{{ request('to_date', $to ?? \Carbon\Carbon::today()->toDateString()) }}"
                 class="w-full mt-1 p-2 border rounded dark:bg-gray-800 dark:text-white dark:border-gray-600">
         </div>
 
@@ -253,13 +272,17 @@
                         No bets found for this filter.
                     </td>
                 </tr>
-                @endforelse
+                @endforelse 
                 @endisset
             </tbody>
         </table>
     </div>
     <div class="mt-4"> 
-        {{ $bets->withQueryString()->links() }}
+        @if(isset($bets) && $bets instanceof \Illuminate\Pagination\LengthAwarePaginator)
+            {{ $bets->withQueryString()->links() }}
+        @else
+            <p>No data available or session expired.</p>
+        @endif
     </div>
 
     {{-- Print Button --}}
@@ -273,7 +296,7 @@
  
         {{-- Export Button --}}
         <a href="{{ route('admin.export-bets', request()->all()) }}"
-        class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg shadow-md transition duration-300 ease-in-out">
+        class="inline-flex items-center px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-black text-sm font-medium rounded-lg shadow-md transition duration-300 ease-in-out">
             📥 Export to Excel
         </a>
     </div>

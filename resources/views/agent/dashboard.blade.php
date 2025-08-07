@@ -39,7 +39,7 @@
 
             <div>
                 <h3 class="font-semibold text-lg text-gray-900 dark:text-white">Important Announcement!</h3>
-                <p class="text-sm text-gray-600 dark:text-gray-300">Schedule Update: August 7, 10PM. Continous Upgrading Ahead!</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300">New features, game updates, and important information will be posted here. Stay tuned for the latest news!</p>
             </div>
         </div>
 
