@@ -1,0 +1,1 @@
+<img src="{{asset('/images/orca-logo.png')}}" alt="" {{ $attributes }}>
