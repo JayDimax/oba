@@ -1,0 +1,1 @@
+<img src="<?php echo e(asset('/images/orca-logo.png')); ?>" alt="" <?php echo e($attributes); ?>><?php /**PATH F:\laragon\www\oba\resources\views/components/application-logo.blade.php ENDPATH**/ ?>
