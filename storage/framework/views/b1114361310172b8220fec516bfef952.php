@@ -1,1 +1,0 @@
-<img src="<?php echo e(asset('/images/orca-logo.png')); ?>" alt="" <?php echo e($attributes); ?>><?php /**PATH /home/u355685815/domains/orcasbettingapp.com/resources/views/components/application-logo.blade.php ENDPATH**/ ?>
