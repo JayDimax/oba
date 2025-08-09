@@ -148,7 +148,7 @@ public function showReceipt($stub)
     ));
 }
 
-public function getReceiptData($stub)
+public function showReceiptJson($stub)
 {
     $agentId = auth()->id();
 
@@ -157,38 +157,35 @@ public function getReceiptData($stub)
         ->get();
 
     if ($bets->isEmpty()) {
-        return response()->json(['error' => 'Receipt not found'], 404);
+        return response()->json(['error' => 'Receipt not found.'], 404);
     }
 
     $firstBet = $bets->first();
-    $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
-    $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
-    $printedTime = now()->format('Y-m-d h:i A');
-    $totalAmount = $bets->sum('amount');
 
-    $betDetails = $bets->map(function ($bet) {
-        return [
-            'draw' => match ((int) $bet->game_draw) {
-                14 => '2PM',
-                17 => '5PM',
-                21 => '9PM',
-                default => $bet->game_draw,
-            },
-            'game' => strtoupper($bet->game_type),
-            'combi' => $bet->bet_number,
-            'amount' => number_format($bet->amount, 2),
-        ];
-    });
-
-    return response()->json([
-        'agentName' => $agentName,
-        'drawDate' => $drawDate,
+    $data = [
+        'agentName' => optional($firstBet->betAgent)->name ?? 'Unknown Agent',
+        'drawDate' => $firstBet->game_date ?? now()->format('Y-m-d'),
         'stub' => $stub,
-        'printedTime' => $printedTime,
-        'totalAmount' => number_format($totalAmount, 2),
-        'bets' => $betDetails
-    ]);
+        'bets' => $bets->map(function ($bet) {
+            return [
+                'draw' => match ((int) $bet->game_draw) {
+                    14 => '2PM',
+                    17 => '5PM',
+                    21 => '9PM',
+                    default => $bet->game_draw,
+                },
+                'game' => strtoupper($bet->game_type),
+                'combi' => $bet->bet_number,
+                'amount' => number_format($bet->amount, 2)
+            ];
+        }),
+        'totalAmount' => number_format($bets->sum('amount'), 2),
+        'printedTime' => now()->format('Y-m-d h:i A')
+    ];
+
+    return response()->json($data);
 }
+
 
 
 public function preview(Request $request)

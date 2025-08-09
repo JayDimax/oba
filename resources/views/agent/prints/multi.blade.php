@@ -126,7 +126,42 @@
 
 <div style="height: 60px;"></div>
 
-<script>
-    window.print();
-</script>
+<!-- <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        import { Plugins } from '@capacitor/core';
+const { BluetoothPrinterPlugin } = Plugins;
+
+// Fetch printer MAC
+async function fetchPrinterMac(agentId, token) {
+  try {
+    const result = await BluetoothPrinterPlugin.fetchPrinterMac({ agentId, token });
+    console.log('Printer MAC:', result.mac);
+  } catch (e) {
+    console.error('Error fetching MAC', e);
+  }
+}
+
+// Select printer manually
+async function selectPrinter() {
+  try {
+    const result = await BluetoothPrinterPlugin.selectPrinter();
+    console.log('Selected MAC:', result.selectedMac);
+  } catch (e) {
+    console.error('Error selecting printer', e);
+  }
+}
+
+// Print receipt text
+async function printReceipt(text) {
+  try {
+    await BluetoothPrinterPlugin.printReceipt({ text });
+    console.log('Print successful');
+  } catch (e) {
+    console.error('Print failed', e);
+  }
+}
+
+    });
+</script> -->
+
 @endsection

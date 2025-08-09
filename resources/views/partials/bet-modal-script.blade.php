@@ -1,5 +1,5 @@
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements
     const openModalBtn = document.getElementById('open-bet-modal');
     const betModal = document.getElementById('bet-modal');
@@ -23,17 +23,18 @@
     const hiddenGameDraw = document.getElementById('game_draw');
     const livePreviewSection = document.getElementById('live-preview');
     const livePreviewList = document.getElementById('live-preview-list');
+    // Import Capacitor Plugins inside the script scope
+    const {
+      BluetoothPrinterPlugin
+    } = window.Capacitor.Plugins || {};
 
-    // Create Print Receipt Button
     const printReceiptBtn = document.createElement('button');
     printReceiptBtn.className = 'ml-2 px-4 py-2 bg-blue-600 text-white text-center rounded hover:bg-blue-700 hidden flex items-center gap-2';
     printReceiptBtn.innerHTML = `
       <i data-lucide="printer"></i>
       <span>Print Receipt</span>
     `;
-    // Append to DOM
     document.body.appendChild(printReceiptBtn);
-    // Activate Lucide icons
     lucide.createIcons();
     addAnotherBetBtn.parentNode.insertBefore(printReceiptBtn, addAnotherBetBtn.nextSibling);
 
@@ -55,6 +56,62 @@
       "Saturday": ["L2", "S3"],
       "Sunday": ["L2", "S3"]
     };
+
+
+    // Helper function to print receipt
+  async function printBetReceipt(betData) {
+  if (!BluetoothPrinterPlugin) {
+    alert('Bluetooth printer plugin not available.');
+    return;
+  }
+
+  const printerMac = await fetchPrinterMac();
+
+  if (!printerMac) {
+    alert('No printer MAC address found. Please set your printer in profile.');
+    return;
+  }
+
+  // Build receipt text (same as before)
+  let receipt = '';
+  receipt += '     ORCAS\n';
+  receipt += `Agent: ${betData.agentName || 'N/A'}\n`;
+  receipt += `Draw Date: ${betData.drawDate || ''}\n`;
+  receipt += `Txn Code: ${betData.stub || ''}\n`;
+  receipt += '------------------------------\n';
+  receipt += 'Draw Game    Combi     Bet\n';
+  receipt += '------------------------------\n';
+
+  betData.bets.forEach(bet => {
+    let drawLabel = bet.draw || bet.game_draw || '';
+    receipt += `${drawLabel} ${bet.game_type || bet.game} ${bet.bet_number || bet.combi} ₱${parseFloat(bet.amount).toFixed(2)}\n`;
+  });
+
+  receipt += '------------------------------\n';
+  receipt += `TOTAL: ₱${parseFloat(betData.totalAmount).toFixed(2)}\n`;
+  receipt += `Printed: ${new Date().toLocaleString()}\n\n\n`;
+
+  try {
+    // Connect first to the printer using MAC (adjust if your plugin requires)
+    await BluetoothPrinterPlugin.connect({ macAddress: printerMac });
+    await BluetoothPrinterPlugin.printReceipt({ text: receipt });
+    await BluetoothPrinterPlugin.disconnect();
+    console.log('Receipt printed successfully');
+  } catch (err) {
+    console.error('Print failed:', err);
+    alert('Failed to print receipt: ' + err.message);
+  }
+}
+
+
+
+
+
+
+
+
+
+
 
     // Helpers
     function parseDrawHour(drawTimeLabel) {
@@ -93,12 +150,17 @@
 
     function validateBetNumber(number, type) {
       const valid = /^\d+$/;
-      const len = { 'L2': 2, 'S3': 3, '4D': 4 }[type];
+      const len = {
+        'L2': 2,
+        'S3': 3,
+        '4D': 4
+      } [type];
       return valid.test(number) && number.length === len;
     }
 
     function generatePermutations(str) {
       const result = new Set();
+
       function permute(arr, m = []) {
         if (arr.length === 0) result.add(m.join(''));
         else {
@@ -129,7 +191,7 @@
         label.setAttribute('for', `perm-${perm}`);
         label.textContent = perm;
         label.className = 'text-gray-800 dark:text-white';
-        checkbox.addEventListener('change', function () {
+        checkbox.addEventListener('change', function() {
           if (this.checked) selectedPermutations.push(this.value);
           else selectedPermutations = selectedPermutations.filter(p => p !== this.value);
         });
@@ -139,6 +201,25 @@
       });
     }
 
+    //fetch printer mac address
+    async function fetchPrinterMac() {
+      try {
+        const response = await fetch('/agent/printer-mac', {
+          headers: {
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin'
+        });
+        if (!response.ok) throw new Error('Failed to fetch printer MAC');
+        const data = await response.json();
+        return data.mac;
+      } catch (err) {
+        console.error('Error fetching printer MAC:', err);
+        return null;
+      }
+    }
+
+    //hotpick
     async function isHotPickLocked(betNumber, gameType, drawTime, gameDate) {
       try {
         const response = await fetch(`/agent/check-hot-pick?bet_number=${encodeURIComponent(betNumber)}&game_type=${gameType}&game_draw=${drawTime}&game_date=${gameDate}`);
@@ -151,64 +232,67 @@
     }
     //live update
     function updateLivePreview(bets) {
-  const livePreviewSection = document.getElementById('live-preview');
-  const livePreviewList = document.getElementById('live-preview-list');
+      const livePreviewSection = document.getElementById('live-preview');
+      const livePreviewList = document.getElementById('live-preview-list');
 
-  livePreviewSection.classList.remove('hidden');
-  livePreviewList.innerHTML = '';
+      livePreviewSection.classList.remove('hidden');
+      livePreviewList.innerHTML = '';
 
-  const grouped = {};
+      const grouped = {};
 
-  bets.forEach(bet => {
-    const key = `${bet.game_draw} • ${bet.game_type}`;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push({ number: bet.bet_number, amount: parseFloat(bet.amount).toFixed(2) });
-  });
+      bets.forEach(bet => {
+        const key = `${bet.game_draw} • ${bet.game_type}`;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push({
+          number: bet.bet_number,
+          amount: parseFloat(bet.amount).toFixed(2)
+        });
+      });
 
-  Object.entries(grouped).forEach(([label, items]) => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'mb-4';
+      Object.entries(grouped).forEach(([label, items]) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-4';
 
-    const header = document.createElement('div');
-    header.className = 'text-sm text-white font-semibold mb-1';
-    header.textContent = label;
-    wrapper.appendChild(header);
+        const header = document.createElement('div');
+        header.className = 'text-sm text-white font-semibold mb-1';
+        header.textContent = label;
+        wrapper.appendChild(header);
 
-    items.forEach(item => {
-      const container = document.createElement('div');
-      container.className = 'flex items-center space-x-2 mb-2';
+        items.forEach(item => {
+          const container = document.createElement('div');
+          container.className = 'flex items-center space-x-2 mb-2';
 
-      // Number Digits
-        const betRow = document.createElement('div');
-        betRow.className = 'flex items-center space-x-2 mb-1'; // Container for each full bet row
+          // Number Digits
+          const betRow = document.createElement('div');
+          betRow.className = 'flex items-center space-x-2 mb-1'; // Container for each full bet row
 
-        // Digits (e.g., 1 2 3)
-        const digitsWrap = document.createElement('div');
-        digitsWrap.className = 'flex space-x-1';
-        for (let char of item.number) {
-          const digitDiv = document.createElement('div');
-          digitDiv.className = 'w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-sm font-bold text-black dark:text-white';
-          digitDiv.textContent = char;
-          digitsWrap.appendChild(digitDiv);
-        }
+          // Digits (e.g., 1 2 3)
+          const digitsWrap = document.createElement('div');
+          digitsWrap.className = 'flex space-x-1';
+          for (let char of item.number) {
+            const digitDiv = document.createElement('div');
+            digitDiv.className = 'w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-sm font-bold text-black dark:text-white';
+            digitDiv.textContent = char;
+            digitsWrap.appendChild(digitDiv);
+          }
 
-        // Amount (e.g., ₱50)
-        const amountDiv = document.createElement('div');
-        amountDiv.className = 'text-sm text-white font-semibold';
-        amountDiv.textContent = `₱${item.amount}`;
+          // Amount (e.g., ₱50)
+          const amountDiv = document.createElement('div');
+          amountDiv.className = 'text-sm text-white font-semibold';
+          amountDiv.textContent = `₱${item.amount}`;
 
-        // Append both to the row
-        betRow.appendChild(digitsWrap);
-        betRow.appendChild(amountDiv);
+          // Append both to the row
+          betRow.appendChild(digitsWrap);
+          betRow.appendChild(amountDiv);
 
-        // Append to your parent container
-        container.appendChild(betRow);
+          // Append to your parent container
+          container.appendChild(betRow);
 
-    });
+        });
 
-    livePreviewList.appendChild(wrapper);
-  });
-}
+        livePreviewList.appendChild(wrapper);
+      });
+    }
 
 
 
@@ -252,7 +336,7 @@
         alert(`🔥 Hot Pick Notice:
       The following numbers are locked and cannot be submitted:
       ${lockedNumbers.join(', ')}`);
-      
+
       }
     }
 
@@ -273,7 +357,7 @@
         successAlert.classList.add('hidden');
         submitBetBtn.classList.remove('hidden');
         addAnotherBetBtn.classList.add('hidden');
-        printReceiptBtn.classList.add('hidden');
+        // printReceiptBtn.classList.add('hidden');
         document.getElementById('print-hint')?.remove();
       });
     }
@@ -306,12 +390,17 @@
       });
     }
 
-    // Print Receipt
-    printReceiptBtn.addEventListener('click', () => {
-      if (submittedStubIds.length > 0) {
-        openBladeReceipt(submittedStubIds);
 
-        // 🔁 After printing, reset the live preview and stub tracking
+    printReceiptBtn.addEventListener('click', async () => {
+      if (submittedStubIds.length > 0) {
+        // Fetch receipt data from API or use cached bet data
+        const response = await fetch(`/api/receipt?stub_ids=${encodeURIComponent(submittedStubIds.join(','))}`);
+        const data = await response.json();
+
+        // Assuming data contains bets and details like betDataForPrint in submit
+        await printBetReceipt(data);
+
+        // Reset UI
         livePreviewList.innerHTML = '';
         livePreviewSection.classList.add('hidden');
         submittedStubIds = [];
@@ -319,6 +408,7 @@
         alert('No bets to print.');
       }
     });
+
 
 
     function openBladeReceipt(stubIds) {
@@ -346,7 +436,7 @@
     });
 
     // Bet Number Input
-    betNumberInput?.addEventListener('input', function () {
+    betNumberInput?.addEventListener('input', function() {
       const number = this.value.trim();
       if (!selectedGameType) return;
       if (validateBetNumber(number, selectedGameType)) {
@@ -382,7 +472,7 @@
     });
 
     // Submit Bet Handler
-    submitBetBtn.addEventListener('click', function (e) {
+    submitBetBtn.addEventListener('click', function(e) {
       e.preventDefault();
       betAmountError.classList.add('hidden');
       const amountInputs = summaryList.querySelectorAll('input.amount-input');
@@ -404,52 +494,56 @@
       }
 
       fetch('/agent/bets/store', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-        },
-        body: JSON.stringify({ bets: allBets })
-      })
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+          },
+          body: JSON.stringify({
+            bets: allBets
+          })
+        })
         .then(res => {
           if (!res.ok) throw new Error('Network failed');
           return res.json();
         })
-        .then(data => {
-        if (!data.success) {
-          alert('❌ Your account is deactivated.');
-          return;
-        }
-
-        // Save stubs
-        allBets.forEach(bet => {
-          if (!submittedStubIds.includes(bet.stub_id)) {
-            submittedStubIds.push(bet.stub_id);
+        .then(async data => {
+          if (!data.success) {
+            alert('❌ Your account is deactivated.');
+            return;
           }
-        });
 
-        // ✅ Add to live preview
-        // updateLivePreview(allBets);
+          // Save stubs
+          allBets.forEach(bet => {
+            if (!submittedStubIds.includes(bet.stub_id)) {
+              submittedStubIds.push(bet.stub_id);
+            }
+          });
 
-        // Show success
-        // successAlert.classList.remove('hidden');
-        // summaryList.classList.add('hidden');
-        submitBetBtn.classList.add('hidden');
-        addAnotherBetBtn.classList.remove('hidden');
-        printReceiptBtn.classList.remove('hidden');
+          // Prepare data for printing
+          const betDataForPrint = {
+            agentName: data.agentName || 'Agent', // adapt as needed
+            drawDate: allBets.length > 0 ? allBets[0].game_date : '',
+            stub: submittedStubIds.join(', '),
+            bets: allBets,
+            totalAmount: allBets.reduce((sum, b) => sum + (b.amount || 0), 0),
+          };
 
-          
-          // //live preview portion
+          // Print receipt automatically
+          await printBetReceipt(betDataForPrint);
+
+          // Existing UI updates
+          submitBetBtn.classList.add('hidden');
+          addAnotherBetBtn.classList.remove('hidden');
+          printReceiptBtn.classList.remove('hidden');
+
+          // Show live preview and append bets
           const livePreviewSection = document.getElementById('live-preview');
           const livePreviewList = document.getElementById('live-preview-list');
 
-          // Show section if hidden
           livePreviewSection.classList.remove('hidden');
-
-          // Append each new bet to the live preview list
           allBets.forEach(bet => {
-            
             let drawTime = '';
             if (bet.game_draw === '14') drawTime = '2PM';
             else if (bet.game_draw === '17') drawTime = '5PM';
@@ -457,40 +551,31 @@
             else drawTime = bet.game_draw;
 
             const li = document.createElement('li');
-            li.className = 'list-none'; 
+            li.className = 'list-none';
             li.innerHTML = `
-              <div class="flex justify-between mb-2">
-                <span class="flex items-center gap-1">
-                  <strong>${bet.game_type}</strong> (${drawTime})
-                  <span class="flex gap-1 ml-2">
-                    ${bet.bet_number.split('').map(num => `
-                      <span class="w-6 h-6 rounded-full bg-yellow-500 text-center text-md flex items-center justify-center dark:text-black">
-                        ${num}
-                      </span>
-                    `).join('')}
-                  </span>
+            <div class="flex justify-between mb-2">
+              <span class="flex items-center gap-1">
+                <strong>${bet.game_type}</strong> (${drawTime})
+                <span class="flex gap-1 ml-2">
+                  ${bet.bet_number.split('').map(num => `
+                    <span class="w-6 h-6 rounded-full bg-yellow-500 text-center text-md flex items-center justify-center dark:text-black">
+                      ${num}
+                    </span>
+                  `).join('')}
                 </span>
-                <span>₱${bet.amount.toFixed(2)}</span>
-              </div>
-            `;
+              </span>
+              <span>₱${bet.amount.toFixed(2)}</span>
+            </div>
+          `;
             livePreviewList.appendChild(li);
           });
-
-          // let hint = document.getElementById('print-hint');
-          // if (!hint) {
-          //   hint = document.createElement('div');
-          //   hint.id = 'print-hint';
-          //   hint.className = 'mt-2 text-sm text-green-600 dark:text-green-400';
-          //   summaryList.parentNode.insertBefore(hint, summaryList.nextSibling);
-          // }
-          // hint.textContent = '✅ Bet saved! You may now print the receipt or add another bet.';
         })
         .catch(err => {
           console.error('Submission error:', err);
           alert('Hot Pick Number. Sold Out! Please choose another.');
           goToStep(1);
         });
-        
+
     });
 
     // Refresh Dashboard
@@ -508,7 +593,9 @@
 
     // Update available games based on day
     function updateAvailableGamesForToday() {
-      const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const today = new Date().toLocaleDateString('en-US', {
+        weekday: 'long'
+      });
       const available = gameScheduleByDay[today] || [];
       gameTypeInputs.forEach(btn => {
         const type = btn.dataset.value;

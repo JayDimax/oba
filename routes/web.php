@@ -183,7 +183,14 @@ Route::middleware(['auth', 'role:agent'])->prefix('agent')->name('agent.')->grou
     Route::get('/receipts/multi/{stub_ids}', [AgentController::class, 'multi'])->name('receipts.multi');
 
     Route::post('/check-hot-pick', [BetController::class, 'checkHotPick']);
-    Route::get('/receipt/{stubId}', [BetController::class, 'getReceiptData']);
+    
+    Route::get('/agent/printer-mac', function (Request $request) {
+    $agent = $request->user();
+    return response()->json([
+        'mac' => $agent->printer_mac ?? null,
+        'agentName' => $agent->name ?? 'Agent',
+    ]);
+    })->name('agent.printerMac');
 
 });
 
@@ -214,7 +221,7 @@ Route::get('/api/check-hot-pick', function (Request $request) {
         'locked' => $count >= $limit
     ]);
 });
-
+Route::get('/receipt/{stubId}', [BetController::class, 'getReceiptData']);
 
 // Auth Routes (Fortify/Breeze)
 require __DIR__ . '/auth.php';
