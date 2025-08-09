@@ -183,7 +183,7 @@ Route::middleware(['auth', 'role:agent'])->prefix('agent')->name('agent.')->grou
     Route::get('/receipts/multi/{stub_ids}', [AgentController::class, 'multi'])->name('receipts.multi');
 
     Route::post('/check-hot-pick', [BetController::class, 'checkHotPick']);
-
+    Route::get('/receipt/{stubId}', [BetController::class, 'getReceiptData']);
 
 });
 

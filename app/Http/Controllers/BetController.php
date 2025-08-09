@@ -148,6 +148,48 @@ public function showReceipt($stub)
     ));
 }
 
+public function getReceiptData($stub)
+{
+    $agentId = auth()->id();
+
+    $bets = Bet::where('stub_id', $stub)
+        ->where('agent_id', $agentId)
+        ->get();
+
+    if ($bets->isEmpty()) {
+        return response()->json(['error' => 'Receipt not found'], 404);
+    }
+
+    $firstBet = $bets->first();
+    $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
+    $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
+    $printedTime = now()->format('Y-m-d h:i A');
+    $totalAmount = $bets->sum('amount');
+
+    $betDetails = $bets->map(function ($bet) {
+        return [
+            'draw' => match ((int) $bet->game_draw) {
+                14 => '2PM',
+                17 => '5PM',
+                21 => '9PM',
+                default => $bet->game_draw,
+            },
+            'game' => strtoupper($bet->game_type),
+            'combi' => $bet->bet_number,
+            'amount' => number_format($bet->amount, 2),
+        ];
+    });
+
+    return response()->json([
+        'agentName' => $agentName,
+        'drawDate' => $drawDate,
+        'stub' => $stub,
+        'printedTime' => $printedTime,
+        'totalAmount' => number_format($totalAmount, 2),
+        'bets' => $betDetails
+    ]);
+}
+
 
 public function preview(Request $request)
 {
