@@ -1,167 +1,120 @@
-@extends('layouts.thermalprinter')
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Printer App</title>
+</head>
+<body>
+  <div id="printer-selection">
+    <button id="btn-list-devices">List Paired Printers</button>
+    <select id="device-list" style="display:none;">
+      <option value="">Select printer</option>
+    </select>
+    <button id="btn-save-printer" style="display:none;">Save Printer</button>
+    <p id="selected-printer"></p>
+  </div>
 
-@section('content')
-<style>
-    body {
-        font-family: monospace;
-        font-size: 13px;
+  <script>
+    const BluetoothSerial = window.bluetoothSerial; // Use plugin global object
+
+    const btnListDevices = document.getElementById('btn-list-devices');
+    const deviceList = document.getElementById('device-list');
+    const btnSavePrinter = document.getElementById('btn-save-printer');
+    const selectedPrinterText = document.getElementById('selected-printer');
+
+    let selectedMAC = localStorage.getItem('selectedPrinterMAC') || null;
+
+    function showSelectedPrinter() {
+      if (selectedMAC) {
+        selectedPrinterText.textContent = `Selected Printer MAC: ${selectedMAC}`;
+      } else {
+        selectedPrinterText.textContent = 'No printer selected.';
+      }
     }
 
-    .center {
-        text-align: center;
-    }
-
-    .bold {
-        font-weight: bold;
-    }
-
-    .divider {
-        border-top: 1px dashed black;
-        margin: 6px 0;
-    }
-
-    .section {
-        margin: 4px 0;
-    }
-
-    .small {
-        font-size: 12px;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    th, td {
-        padding: 4px 0;
-    }
-
-    th {
-        font-size: 13px;
-    }
-
-    td {
-        font-size: 18px;
-    }
-</style>
-
-<div class="center" style="margin-bottom: 6px;">
-    <img src="{{ asset('images/tlogo.png') }}" alt="Logo"
-         style="width: 80px; max-width: 100%; display: inline-block;">
-</div>
-
-<div class="center bold" style="font-size: 16px;">ORCAS</div>
-<div class="center bold" style="font-size: 14px;">Agent: {{ $bets->first()->betAgent->name ?? 'N/A' }}</div>
-
-<div class="section" style="font-size: 13px;">
-    <div>Draw Date: <strong>{{ $bets->first()->game_date }}</strong></div>
-
-    @php
-        $stubList = $bets->pluck('stub_id')->unique();
-        $chunks = $stubList->chunk(3); // Fix: properly chunk the unique stub IDs
-    @endphp
-
-    <div>
-        Txn Code(s):
-        <strong>
-            @foreach($chunks as $chunk)
-                {{ $chunk->implode(', ') }}<br>
-            @endforeach
-        </strong>
-    </div>
-</div>
-
-<div class="divider"></div>
-
-<table>
-    <thead>
-        <tr class="bold">
-            <th style="text-align: left;">Draw</th>
-            <th style="text-align: left;">Game</th>
-            <th style="text-align: center;">Combi</th>
-            <th style="text-align: right;">Bet</th>
-        </tr>
-    </thead>
-    <tbody>
-        @php $totalAmount = 0; @endphp
-        @foreach ($bets as $bet)
-            <tr>
-                <td style="text-align: left;">
-                    {{ match ((int) $bet->game_draw) {
-                        14 => '2PM',
-                        17 => '5PM',
-                        21 => '9PM',
-                        default => $bet->game_draw,
-                    } }}
-                </td>
-                <td style="text-align: left;">{{ strtoupper($bet->game_type) }}</td>
-                <td style="text-align: center;">{{ $bet->bet_number }}</td>
-                <td style="text-align: right;">{{ number_format($bet->amount, 2) }}</td>
-            </tr>
-            @php $totalAmount += $bet->amount; @endphp
-        @endforeach
-    </tbody>
-</table>
-
-<div class="divider"></div>
-
-<div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 18px; margin-top: 6px;">
-    <div>TOTAL:</div>
-    <div>{{ number_format($totalAmount, 2) }}</div>
-</div>
-
-<div class="divider"></div>
-
-{{-- ✅ QR code at bottom if single stub --}}
-@if ($stubList->count() === 1)
-    <div class="center section">
-        {!! QrCode::size(50)->generate($stubList->first()) !!}
-    </div>
-@endif
-
-<div class="center section small">
-    Printed: {{ now()->format('Y-m-d H:i:s') }}
-</div>
-
-<div style="height: 60px;"></div>
-
-<!-- <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        import { Plugins } from '@capacitor/core';
-const { BluetoothPrinterPlugin } = Plugins;
-
-// Fetch printer MAC
-async function fetchPrinterMac(agentId, token) {
-  try {
-    const result = await BluetoothPrinterPlugin.fetchPrinterMac({ agentId, token });
-    console.log('Printer MAC:', result.mac);
-  } catch (e) {
-    console.error('Error fetching MAC', e);
-  }
-}
-
-// Select printer manually
-async function selectPrinter() {
-  try {
-    const result = await BluetoothPrinterPlugin.selectPrinter();
-    console.log('Selected MAC:', result.selectedMac);
-  } catch (e) {
-    console.error('Error selecting printer', e);
-  }
-}
-
-// Print receipt text
-async function printReceipt(text) {
-  try {
-    await BluetoothPrinterPlugin.printReceipt({ text });
-    console.log('Print successful');
-  } catch (e) {
-    console.error('Print failed', e);
-  }
-}
-
+    btnListDevices.addEventListener('click', () => {
+      BluetoothSerial.list(
+        devices => {
+          deviceList.innerHTML = '<option value="">Select printer</option>';
+          devices.forEach(dev => {
+            const option = document.createElement('option');
+            option.value = dev.address;
+            option.textContent = `${dev.name || 'Unknown Device'} (${dev.address})`;
+            deviceList.appendChild(option);
+          });
+          deviceList.style.display = 'inline-block';
+          btnSavePrinter.style.display = 'inline-block';
+        },
+        err => alert('Failed to list devices: ' + err)
+      );
     });
-</script> -->
 
-@endsection
+    deviceList.addEventListener('change', () => {
+      selectedMAC = deviceList.value;
+    });
+
+    btnSavePrinter.addEventListener('click', () => {
+      if (!selectedMAC) {
+        alert('Please select a printer first.');
+        return;
+      }
+      localStorage.setItem('selectedPrinterMAC', selectedMAC);
+      showSelectedPrinter();
+      alert('Printer saved!');
+    });
+
+    showSelectedPrinter();
+
+    async function printReceipt(stubId) {
+      if (!selectedMAC) {
+        alert('No printer selected! Please select and save a printer first.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`agent/receipt/${stubId}`, 
+        );
+        const data = await response.json();
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+
+        let receipt = '';
+        receipt += '     ORCAS\n';
+        receipt += `Agent: ${data.agentName}\n`;
+        receipt += `Draw Date: ${data.drawDate}\n`;
+        receipt += `Txn Code: ${data.stub}\n`;
+        receipt += '------------------------------\n';
+        receipt += 'Draw Game    Combi     Bet\n';
+        receipt += '------------------------------\n';
+
+        data.bets.forEach(bet => {
+          receipt += `${bet.draw} ${bet.game} ${bet.combi} ${bet.amount}\n`;
+        });
+
+        receipt += '------------------------------\n';
+        receipt += `TOTAL: ${data.totalAmount}\n`;
+        receipt += `Printed: ${data.printedTime}\n\n\n`;
+
+        BluetoothSerial.connect(
+          selectedMAC,
+          () => {
+            BluetoothSerial.write(receipt, () => {
+              console.log('Receipt sent to printer.');
+            }, err => {
+              console.error('Write error:', err);
+            });
+          },
+          err => {
+            console.error('Connect error:', err);
+          }
+        );
+      } catch (err) {
+        console.error('Print error:', err);
+      }
+    }
+  </script>
+</body>
+</html>
