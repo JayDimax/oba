@@ -814,37 +814,6 @@ class AgentController extends Controller
         ]);
     }
 
-
-    // private function computeNetRemittance($agentId, $date)
-    // {
-    //     $bets = \App\Models\Bet::where('agent_id', $agentId)
-    //                 ->whereDate('game_date', $date)
-    //                 ->get();
-
-    //     $gross = $bets->sum('amount');
-
-    //     // Get commission rate from agent_commissions
-    //     $commissionRate = \App\Models\AgentCommission::where('agent_id', $agentId)
-    //                         ->pluck('commission_percent', 'game_type');
-
-    //     $commissionBase = $bets->groupBy('game_type')->sum(function ($group, $gameType) use ($commissionRate) {
-    //         $rate = $commissionRate[$gameType] ?? 0.10;
-    //         return $group->sum('amount') * $rate;
-    //     });
-
-    //     $commissionBonus = $bets->where('is_winner', true)
-    //                             ->sum('commission_bonus');
-
-    //     $deduction = \App\Models\Deduction::where('agent_id', $agentId)
-    //                     ->whereDate('deduction_date', $date)
-    //                     ->value('amount') ?? 0;
-
-    //     $netSales = $gross - $commissionBase;
-
-    //     return $netSales - $commissionBonus + $deduction;
-    // }
-
-
     public function support() {
         return view('agent.support');
     }
