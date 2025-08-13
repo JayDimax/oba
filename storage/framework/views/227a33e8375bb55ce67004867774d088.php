@@ -13,30 +13,38 @@
 </aside>
 
 
-<x-layouts.panel> 
-  <x-slot name="sidebar">
-    @include('partials.agent-sidebar')
-  </x-slot>
+<?php if (isset($component)) { $__componentOriginalbd26f90b0e8ad6cc54a49c99a73eac08 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalbd26f90b0e8ad6cc54a49c99a73eac08 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.layouts.panel','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? (array) $attributes->getIterator() : [])); ?>
+<?php $component->withName('layouts.panel'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag && $constructor = (new ReflectionClass(Illuminate\View\AnonymousComponent::class))->getConstructor()): ?>
+<?php $attributes = $attributes->except(collect($constructor->getParameters())->map->getName()->all()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?> 
+   <?php $__env->slot('sidebar', null, []); ?> 
+    <?php echo $__env->make('partials.agent-sidebar', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+   <?php $__env->endSlot(); ?>
   <h1 class="text-2xl font-bold mb-4 text-gray-800 dark:text-white">📤 Daily Collection</h1>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
     <!-- Cashier Card -->
     <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 space-y-1">
       <div class="text-xs uppercase text-gray-400">Cashier</div>
-      <div class="font-bold text-lg text-gray-800 dark:text-white">{{ $cashier->name ?? 'Unassigned' }}</div>
-      <div class="text-gray-500 dark:text-gray-300">{{ $cashier->agent_code ?? 'N/A' }}</div>
+      <div class="font-bold text-lg text-gray-800 dark:text-white"><?php echo e($cashier->name ?? 'Unassigned'); ?></div>
+      <div class="text-gray-500 dark:text-gray-300"><?php echo e($cashier->agent_code ?? 'N/A'); ?></div>
       <div class="text-sm text-gray-600 dark:text-gray-300 mt-1 italic">
         Authorized Cashier
       </div>
-      {{-- <div class="text-sm text-gray-500 dark:text-gray-400">{{ $cashier->betAgent->phone ?? 'N/A' }}
-    </div> --}}
+      
   </div>
 
   <!-- Agent Card -->
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 space-y-1">
     <div class="text-xs uppercase text-gray-400">Collector</div>
-    <div class="font-bold text-lg text-gray-800 dark:text-white">{{ $agent->name }}</div>
-    <div class="text-sm text-gray-500 dark:text-gray-400">{{ $agent->agent_code ?? 'N/A' }}</div>
+    <div class="font-bold text-lg text-gray-800 dark:text-white"><?php echo e($agent->name); ?></div>
+    <div class="text-sm text-gray-500 dark:text-gray-400"><?php echo e($agent->agent_code ?? 'N/A'); ?></div>
     <div class="text-sm text-gray-600 dark:text-gray-300 mt-1 italic">
       Registered Agent
     </div>
@@ -44,50 +52,54 @@
   </div>
 
 
-@if ($hasResults)
+<?php if($hasResults): ?>
   <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 border-l-4 border-blue-600 mt-4">
     <div class="text-xs uppercase text-gray-500 dark:text-gray-300 mb-1 font-semibold">
-        Overall Remittance for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}
+        Overall Remittance for <?php echo e(\Carbon\Carbon::parse($date)->format('F j, Y')); ?>
+
     </div>
     <div class="text-2xl font-bold text-blue-600 dark:text-blue-300">
-        ₱{{ number_format($overallRemittance, 2) }}
+        ₱<?php echo e(number_format($overallRemittance, 2)); ?>
+
     </div>
     <div class="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
         Computed after all game draw results were declared.
     </div>
 
     <div class="mt-3 text-sm text-gray-600 dark:text-gray-300">
-        <div>Gross Sales: <strong>₱{{ number_format($liveNetRemitBreakdown['gross'], 2) }}</strong></div>
-        <div>Commission: <strong>₱{{ number_format($liveNetRemitBreakdown['commission'], 2) }}</strong></div>
-        <div>Payouts: <strong>₱{{ number_format($liveNetRemitBreakdown['payouts'], 2) }}</strong></div>
-        <div>Projected Income: <strong>₱{{ number_format($liveNetRemitBreakdown['projected_income'], 2) }}</strong></div>
+        <div>Gross Sales: <strong>₱<?php echo e(number_format($liveNetRemitBreakdown['gross'], 2)); ?></strong></div>
+        <div>Commission: <strong>₱<?php echo e(number_format($liveNetRemitBreakdown['commission'], 2)); ?></strong></div>
+        <div>Payouts: <strong>₱<?php echo e(number_format($liveNetRemitBreakdown['payouts'], 2)); ?></strong></div>
+        <div>Projected Income: <strong>₱<?php echo e(number_format($liveNetRemitBreakdown['projected_income'], 2)); ?></strong></div>
     </div>
   </div>
-@endif
+<?php endif; ?>
 
 
-  {{-- Feedback Alerts --}}
-  @if (session('success'))
+  
+  <?php if(session('success')): ?>
   <div
     x-data="{ show: true }"
     x-show="show"
     x-init="setTimeout(() => show = false, 3000)"
     x-transition
     class="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 px-4 py-3 rounded shadow mb-4">
-    ✅ {{ session('success') }}
-  </div>
-  @endif
+    ✅ <?php echo e(session('success')); ?>
 
-  @if (session('error'))
+  </div>
+  <?php endif; ?>
+
+  <?php if(session('error')): ?>
   <div
     x-data="{ show: true }"
     x-show="show"
     x-init="setTimeout(() => show = false, 4000)"
     x-transition
     class="bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-100 px-4 py-3 rounded shadow mb-4">
-    ⚠️ {{ session('error') }}
+    ⚠️ <?php echo e(session('error')); ?>
+
   </div>
-  @endif
+  <?php endif; ?>
 
 <!-- Agent Remittance Form (Horizontal Layout) -->
 <div x-data="{ confirm: false, preview: null, loading: false }" class="w-full overflow-auto px-0 mt-6">
@@ -97,18 +109,18 @@
     <!-- Form Section -->
     <form id="remitForm"
           method="POST"
-          action="{{ route('agent.collections.store') }}"
+          action="<?php echo e(route('agent.collections.store')); ?>"
           enctype="multipart/form-data"
           class="flex flex-col lg:flex-row lg:items-end lg:space-x-6 space-y-4 lg:space-y-0"
           x-init="$watch(() => $refs.date.value, async (val) => {
               if (!val) return;
               loading = true;
-              const res = await fetch(`{{ route('agent.remit-preview') }}?date=${val}`);
+              const res = await fetch(`<?php echo e(route('agent.remit-preview')); ?>?date=${val}`);
               preview = await res.json();
               loading = false;
           })"
     >
-      @csrf
+      <?php echo csrf_field(); ?>
 
       <!-- Game Date -->
       <div class="flex-1">
@@ -119,7 +131,7 @@
                name="collection_date"
                id="collection_date"
                x-ref="date"
-               value="{{ old('collection_date', $gameDate ?? now()->toDateString()) }}"
+               value="<?php echo e(old('collection_date', $gameDate ?? now()->toDateString())); ?>"
                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                required>
       </div>
@@ -169,4 +181,14 @@
 </div>
 
 
-</x-layouts.panel>
+ <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalbd26f90b0e8ad6cc54a49c99a73eac08)): ?>
+<?php $attributes = $__attributesOriginalbd26f90b0e8ad6cc54a49c99a73eac08; ?>
+<?php unset($__attributesOriginalbd26f90b0e8ad6cc54a49c99a73eac08); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalbd26f90b0e8ad6cc54a49c99a73eac08)): ?>
+<?php $component = $__componentOriginalbd26f90b0e8ad6cc54a49c99a73eac08; ?>
+<?php unset($__componentOriginalbd26f90b0e8ad6cc54a49c99a73eac08); ?>
+<?php endif; ?>
+<?php /**PATH D:\laragon\www\oba\resources\views/agent/collections.blade.php ENDPATH**/ ?>

@@ -322,7 +322,7 @@
 
 
     function openBladeReceipt(stubIds) {
-      const url = "{{ route('agent.receipts.multi', 'stub_id_placeholder') }}"
+      const url = "<?php echo e(route('agent.receipts.multi', 'stub_id_placeholder')); ?>"
         .replace('stub_id_placeholder', encodeURIComponent(stubIds.join(',')));
       window.open(url, '_blank');
     }
@@ -520,4 +520,4 @@
     // Initialize on load
     updateAvailableGamesForToday();
   });
-</script>
+</script><?php /**PATH D:\laragon\www\oba\resources\views/partials/bet-modal-script.blade.php ENDPATH**/ ?>

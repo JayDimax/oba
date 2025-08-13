@@ -224,27 +224,6 @@ class DashboardController extends Controller
 
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     public function exportBets(Request $request)
     {
         $from       = $request->input('from_date');

@@ -6,13 +6,14 @@ use Carbon\Carbon;
 use App\Models\Bet;
 use App\Models\User;
 use App\Models\Agent;
-use App\Models\AgentCommission;
 use App\Models\Result;
 use App\Models\Deduction;
 use App\Models\Collection;
 use App\Models\Multiplier;
 use Illuminate\Http\Request;
+use App\Models\AgentCommission;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Services\RemittanceCalculator;
 use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -220,100 +221,93 @@ class AgentController extends Controller
         return view('agent.results', compact('date', 'draw', 'results'));
     }
 
-
-   
-    public function reports(Request $request) 
+    public function reports(Request $request)
     {
         $agentId = auth()->id();
         $date = $request->input('draw_date', now()->toDateString());
-        $yesterday = \Carbon\Carbon::parse($date)->subDay()->toDateString();
         $draw = $request->input('draw'); // all, 1st, 2nd, 3rd
 
-        // Map: UI draw tabs to draw time codes
+        // Map UI draw tabs to draw time codes
         $drawMap = [
             '1st' => '14',
             '2nd' => '17',
             '3rd' => '21',
         ];
 
-        // Game types per draw time
+        // Game types per draw time code
         $gameTypeMap = [
             '14' => 'L2',
             '17' => 'S3',
             '21' => '4D',
         ];
 
-        // Base bet query
+        // Base bet query filtered by agent and date
         $query = Bet::where('agent_id', $agentId)
                     ->whereDate('game_date', $date);
-        
-        // Fetch commission rate from agent_commissions table
-        $commissionRecord = AgentCommission::where('agent_id', $agentId)
-        ->orderByDesc('updated_at')
-        ->first();
 
-        $commissionRate = ($commissionRecord?->commission_percent ?? 0) ;
-    
-        
-        // Apply draw filter if tab is selected
+        // Apply draw filter if tab selected
         if (isset($drawMap[$draw])) {
             $query->where('game_draw', $drawMap[$draw]);
         }
 
-        $bets = $query->get();   
+        $bets = $query->get();
 
-        // Gross and commission
-        $gross            = $bets->sum('amount');
-        $commissionBase   = $gross * ($commissionRate / 100);
-        $netSales         = $gross - $commissionBase;
+        // --- Universal commission calculation per game_type ---
 
-        // Get winning bets based on current tab logic
+        // Fetch all commission rates for this agent, keyed by uppercase game_type
+        $commissionRates = AgentCommission::where('agent_id', $agentId)
+            ->pluck('commission_percent', 'game_type')
+            ->mapWithKeys(fn($rate, $gameType) => [strtoupper($gameType) => $rate])
+            ->toArray();
+
+        // Group bets by uppercase game_type
+        $groupedBets = $bets->groupBy(fn($bet) => strtoupper($bet->game_type));
+
+        $totalCommissionBase = 0;
+        foreach ($groupedBets as $gameType => $groupedBet) {
+            $grossByGameType = $groupedBet->sum('amount');
+            $rate = $commissionRates[$gameType] ?? 0;
+            $totalCommissionBase += $grossByGameType * ($rate / 100);
+        }
+
+        // Total gross across all bets
+        $totalGross = $bets->sum('amount');
+        $netSales = $totalGross - $totalCommissionBase;
+
+        // Winning bets for hits, payouts, commission bonuses (filtered by draw tab)
         $winningBets = $bets->filter(function ($bet) use ($draw, $drawMap, $gameTypeMap) {
             if (!$bet->is_winner) return false;
 
             if ($draw === null || $draw === 'all') {
-                // ALL tab: only include correct game type for each draw
-                return isset($gameTypeMap[$bet->game_draw]) &&
-                    $bet->game_type === $gameTypeMap[$bet->game_draw];
+                return isset($gameTypeMap[$bet->game_draw]) && $bet->game_type === $gameTypeMap[$bet->game_draw];
             }
 
-            
-            $targetDrawCode   = $drawMap[$draw] ?? null;
+            $targetDrawCode = $drawMap[$draw] ?? null;
             $expectedGameType = $gameTypeMap[$targetDrawCode] ?? null;
 
-            return $bet->game_draw === $targetDrawCode &&
-                $bet->game_type === $expectedGameType;
+            return $bet->game_draw === $targetDrawCode && $bet->game_type === $expectedGameType;
         });
 
+        $commissionBonus = $winningBets->sum('commission_bonus');
+        $hits = $winningBets->sum('amount');
+        $payouts = $winningBets->sum('winnings');
 
-        // Winnings and hits from yesterday's results
-        $commissionBonusQuery = clone $query;
-        $commissionBonus = $commissionBonusQuery->where('is_winner', true)->sum('commission_bonus');
-
-        $hitsQuery = clone $query; // copy the base query to retain filters
-        $hits = $hitsQuery->where('is_winner', true)->sum('amount');
-        
-        
-        $payoutsQuery = clone $query;
-        $payouts = $payoutsQuery->where('is_winner',true)->sum('winnings');
-
-
-        // Deduction (external table)
+        // Deductions from external table
         $deduction = Deduction::where('agent_id', $agentId)
-                            ->whereDate('deduction_date', $date)
-                            ->value('amount') ?? 0;
+            ->whereDate('deduction_date', $date)
+            ->value('amount') ?? 0;
 
-        // Final computation 
-        $totalRemittance       = $netSales + $deduction;
+        // Final calculations
+        $totalRemittance = $netSales + $deduction;
         $remittanceAfterPayouts = $totalRemittance - $payouts;
 
-        // Deficit occurs if payouts exceed net sales (i.e. system owes money)
         $deficit = 0;
         if ($remittanceAfterPayouts < 0) {
-            $deficit = abs($remittanceAfterPayouts); // Positive deficit value
+            $deficit = abs($remittanceAfterPayouts);
         }
-                $perDrawStats = [];
 
+        // Stats per draw (14, 17, 21)
+        $perDrawStats = [];
         foreach (['14', '17', '21'] as $drawCode) {
             $perDrawStats[$drawCode] = [
                 'gross' => $bets->where('game_draw', $drawCode)->sum('amount'),
@@ -321,50 +315,31 @@ class AgentController extends Controller
             ];
         }
 
-        // Only for 'all' tab
-        $validAllBets = $bets->filter(function ($bet) use ($gameTypeMap) {
-            return isset($gameTypeMap[$bet->game_draw]) &&
-                $bet->game_type === $gameTypeMap[$bet->game_draw];
-        });
-
-        $grossAll      = $validAllBets->sum('gross_amount');
-        $commissionAll = $validAllBets->sum('commission');
-        $netSalesAll   = $grossAll - $commissionAll;
-        $payoutsAll    = $validAllBets->where('is_winner', true)->sum('payout');
-
-        $tapada = 0;
-        if ($netSalesAll < $payoutsAll) {
-            $tapada = $payoutsAll - $netSalesAll;
-        }
-
-
-        // Build summary
+        // Build summary array
         $summary = [
-            'gross'              => $gross,
-            'commission_base'    => $commissionBase,
-            'commission_bonus'   => $commissionBonus,
-            'commission'         => $commissionBase + $commissionBonus,
-            'net_sales'          => $netSales,
-            'hits'               => $hits, // now fixed
-            'payouts'            => $payouts,
-            'incentives'         => $commissionBonus,
-            'deductions'         => $deduction,
-            'net_total'          => $totalRemittance,
-            'net_after_payouts'  => $remittanceAfterPayouts,
-            'deficit'            => $deficit,
-            'tapada'             => $deficit,
+            'gross'            => $totalGross,
+            'commission_base'  => $totalCommissionBase,
+            'commission_bonus' => $commissionBonus,
+            'commission'       => $totalCommissionBase + $commissionBonus,
+            'net_sales'        => $netSales,
+            'hits'             => $hits,
+            'payouts'          => $payouts,
+            'incentives'       => $commissionBonus,
+            'deductions'       => $deduction,
+            'net_total'        => $totalRemittance,
+            'net_after_payouts'=> $remittanceAfterPayouts,
+            'deficit'          => $deficit,
+            'tapada'           => $deficit, // unclear but kept as in your code
         ];
 
-
         return view('agent.reports', [
-            'date'    => $date,
-            'draw'    => $draw,
-            'summary' => $summary,
-            'reports' => $bets,
-            'perDrawStats' => $perDrawStats,
+            'date'        => $date,
+            'draw'        => $draw,
+            'summary'     => $summary,
+            'reports'     => $bets,
+            'perDrawStats'=> $perDrawStats,
         ]);
     }
-
 
     // summary receipt
     public function SummaryReceipt(Request $request)
@@ -555,17 +530,18 @@ class AgentController extends Controller
             ->whereNotNull('is_winner')
             ->exists();
 
-            $overallRemittance = null;
+           
+        $overallRemitBreakdown = null;
 
-            if ($hasResults) {
-                $betsForDate = DB::table('bets')
-                    ->where('agent_id', $agent->id)
-                    ->whereDate('game_date', $date)
-                    ->get();
+        if ($hasResults) {
+            $betsForDate = Bet::where('agent_id', $agent->id)
+                ->whereDate('game_date', $date)
+                ->get();
 
-                $overallRemit = \App\Services\RemittanceCalculator::computeNetRemit($betsForDate);
-                $overallRemittance = $overallRemit['computed'];
-            }
+            $overallRemitBreakdown = RemittanceCalculator::computeNetRemit($betsForDate);
+            $overallRemittance = $overallRemitBreakdown['computed'];
+        }
+
         // Use RemittanceCalculator for consistent logic
         $remit = RemittanceCalculator::computeNetRemit($unsubmittedBets);
         $gross = $remit['gross'];
@@ -641,12 +617,12 @@ class AgentController extends Controller
 
         // 🔄 Live daily cumulative preview for current date
         $today = now()->toDateString();
-        $liveBets = DB::table('bets')
-            ->where('agent_id', $agent->id)
+       $liveBets = Bet::where('agent_id', $agent->id)
             ->whereDate('created_at', $today)
             ->get();
 
         $liveRemit = RemittanceCalculator::computeNetRemit($liveBets);
+
 
         return view('agent.collections', [
             'agent' => $agent,
@@ -670,10 +646,10 @@ class AgentController extends Controller
             'liveNetRemitBreakdown' => $liveRemit,
             'hasResults' => $hasResults,
             'remittanceBreakdown' => $remit, 
-            'overallRemittance' => $remit['computed'],
+            'overallRemittance' => $overallRemittance,
+            'overallRemitBreakdown' => $overallRemitBreakdown,
         ]);
     }
-
 
  
     //submitting collections to cashier by agent

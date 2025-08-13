@@ -30,6 +30,7 @@ class RemittanceCalculator
                 $commission += $groupGross * $percent;
             }
         });
+        
 
         $hasWinners = $bets->contains(fn($b) => (int) $b->is_winner === 1);
 
@@ -56,14 +57,30 @@ class RemittanceCalculator
         ];
     }
 
-    public static function getCommissionRate($agentId, $gameType)
+    public static function calculateCommissionForBetsByAgent($bets, int $agentId): float
     {
-        $rate = DB::table('agent_commission')
-            ->where('agent_id', $agentId)
-            ->where('game_type', $gameType)
-            ->value('commission_percent');
+        if ($bets->isEmpty()) {
+            return 0;
+        }
 
-        return $rate ?? 0; 
+        // Fetch commission rates for the agent, keyed by uppercase game_type
+        $commissionRates = \App\Models\AgentCommission::where('agent_id', $agentId)
+            ->pluck('commission_percent', 'game_type')
+            ->mapWithKeys(fn($percent, $gameType) => [strtoupper($gameType) => $percent])
+            ->toArray();
+
+        // Group bets by uppercase game_type
+        $groupedBets = $bets->groupBy(fn($bet) => strtoupper($bet->game_type));
+
+        $totalCommission = 0;
+
+        foreach ($groupedBets as $gameType => $betsGroup) {
+            $gross = $betsGroup->sum('amount');
+            $rate = $commissionRates[$gameType] ?? 0;
+            $totalCommission += $gross * ($rate / 100);
+        }
+
+        return $totalCommission;
     }
 
 
