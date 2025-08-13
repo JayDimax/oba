@@ -922,10 +922,34 @@ class AgentController extends Controller
 
     public function multi($stub_ids)
     {
+        // Split the comma-separated stub IDs
         $ids = explode(',', $stub_ids);
-        $bets = Bet::whereIn('stub_id', $ids)->with('agent')->get();
 
-        return view('agent.prints.multi', compact('bets'));
+        // Fetch bets for those stubs, including agent relationship
+        $bets = Bet::whereIn('stub_id', $ids)->with('betAgent')->get();
+
+        // Group bets by stub
+        $receipts = $bets->groupBy('stub_id')->map(function ($group, $stub) {
+            $firstBet = $group->first();
+
+            return (object)[
+                'stub' => $stub,
+                'agentName' => optional($firstBet->betAgent)->name ?? 'Unknown Agent',
+                'totalAmount' => $group->sum('amount'),
+                'bets' => $group->map(function ($bet) {
+                    return [
+                        'draw' => $bet->draw,
+                        'game' => $bet->game,
+                        'combi' => $bet->combi,
+                        'amount' => $bet->amount,
+                    ];
+                })->values()
+            ];
+        })->values(); // re-index array for Blade
+
+        // Pass $receipts to Blade
+        return view('agent.prints.multi', compact('receipts'));
     }
+
 
 }

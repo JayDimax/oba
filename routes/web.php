@@ -181,6 +181,22 @@ Route::middleware(['auth', 'role:agent'])->prefix('agent')->name('agent.')->grou
     Route::get('/receipts/{stub}', [BetController::class, 'showReceipt'])->name('receipts.show');
     Route::get('/remit-preview', [AgentController::class, 'remitPreview'])->name('remit-preview');
     Route::get('/receipts/multi/{stub_ids}', [AgentController::class, 'multi'])->name('receipts.multi');
+    
+    Route::post('/receipts-json-multi', [BetController::class, 'showReceiptsJsonMulti'])->name('receipts.json.multi');
+    Route::get('/multi-receipts', [BetController::class, 'showMultiReceipts'])->name('multi.receipts');
+
+    Route::get('/receipts-json/{stub}', [BetController::class, 'getReceiptJson'])->name('receipts.json');
+
+
+
+
+
+
+
+
+
+
+
 
     Route::post('/check-hot-pick', [BetController::class, 'checkHotPick']);
     

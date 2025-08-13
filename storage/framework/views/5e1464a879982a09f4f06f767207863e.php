@@ -122,14 +122,15 @@
 
     <h2>Receipts</h2>
     <div id="receipt-list">
-        @foreach($receipts as $receipt)
-            <div class="receipt-item" data-stub="{{ $receipt->stub }}">
-                <p>Stub: {{ $receipt->stub }} | Agent: {{ $receipt->agentName }} | Total: {{ $receipt->totalAmount }}</p>
+        <?php $__currentLoopData = $receipts; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $receipt): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+            <div class="receipt-item" data-stub="<?php echo e($receipt->stub); ?>">
+                <p>Stub: <?php echo e($receipt->stub); ?> | Agent: <?php echo e($receipt->agentName); ?> | Total: <?php echo e($receipt->totalAmount); ?></p>
             </div>
-        @endforeach
+        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
     </div>
 
     <button id="btn-print-multi" style="margin-top:20px;">Print All Selected Receipts</button>
 
 </body>
 </html>
+<?php /**PATH D:\laragon\www\oba\resources\views/agent/prints/multi.blade.php ENDPATH**/ ?>
