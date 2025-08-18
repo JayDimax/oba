@@ -29,7 +29,10 @@
    <?php $__env->endSlot(); ?>
 
   <div class="min-h-screen x-cloak dark:bg-gray-900 p-4 flex flex-col space-y-6">
+
+
     <!-- Header -->
+
     <div class="mb-6 mt-4" x-data="{ showAnnouncement: true }" x-cloak>
     <div x-show="showAnnouncement"
          x-transition:enter="transition ease-out duration-300"
@@ -69,7 +72,6 @@
       </div>
       <img src="<?php echo e(asset('images/orca-logo.png')); ?>" alt="ORCAS Logo" class="h-12 w-auto mb-6">
     </div>
-
         <!-- SECTION 2: Today Gross & Add Bet -->
       <div 
           class="bg-white  bg-gray-800 shadow rounded-lg p-3 w-full dark:bg-gray-800 rounded-xl p-4  flex justify-between items-center"
@@ -248,6 +250,22 @@
       </div>
     </div>
   </div>
+    <script>
+        function fixPrinterSetup() {
+          // Only run in Capacitor app
+          if (window.Capacitor) {
+            // Redirect to deep link
+            window.location.href = 'https://orcasbettingapp.com/action/setup';
+          } else {
+            alert("Printer setup only available in the Orcas Android app");
+          }
+        }
+        function goBackToWebApp() {
+          window.location.href = 'https://orcasbettingapp.com';
+        }
+    </script>
+
+
  <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginalbd26f90b0e8ad6cc54a49c99a73eac08)): ?>

@@ -306,27 +306,80 @@
       });
     }
 
-    // Print Receipt
-    printReceiptBtn.addEventListener('click', () => {
-      if (submittedStubIds.length > 0) {
-        openBladeReceipt(submittedStubIds);
+    
+ // Print receipt (multiple stubs at once)
+  printReceiptBtn.addEventListener('click', async () => {
+  if (submittedStubIds.length === 0) {
+    alert('No bets to print.');
+    return;
+  }
 
-        // 🔁 After printing, reset the live preview and stub tracking
-        livePreviewList.innerHTML = '';
-        livePreviewSection.classList.add('hidden');
-        submittedStubIds = [];
-      } else {
-        alert('No bets to print.');
-      }
+  try {
+    printReceiptBtn.innerHTML = `
+      <i data-lucide="loader" class="animate-spin"></i>
+      <span>Printing...</span>
+    `;
+    lucide.createIcons();
+    printReceiptBtn.disabled = true;
+
+    // --- 1) Prepare API URL ---
+    const baseUrl = "https://orcasbettingapp.com/api";   // 👈 your API base
+    const stubIds = submittedStubIds.join(',');
+    const url = `${baseUrl}/print-multi?stub_ids=${encodeURIComponent(stubIds)}`;
+
+    console.log("🔗 Fetching:", url);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
     });
 
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    function openBladeReceipt(stubIds) {
-      const url = "<?php echo e(route('agent.receipts.multi', 'stub_id_placeholder')); ?>"
-        .replace('stub_id_placeholder', encodeURIComponent(stubIds.join(',')));
-      window.open(url, '_blank');
+    const receiptData = await response.json();
+    console.log("🧾 Receipt Data:", receiptData);
+
+    // Expect Laravel to return: { success: true, stubs: {...} }
+    if (!receiptData.success || !receiptData.stubs) {
+      throw new Error('Invalid receipt data');
     }
 
+    // --- 2) Call Android JS interface ---
+    if (window.AndroidPrinter && typeof window.AndroidPrinter.printReceipt === 'function') {
+      window.AndroidPrinter.printReceipt(JSON.stringify(receiptData));
+    } else {
+      alert('🖨️ Printer interface not available. Open in Android app.');
+    }
+
+    // --- 3) Reset UI ---
+    livePreviewList.innerHTML = '';
+    livePreviewSection.classList.add('hidden');
+    submittedStubIds = [];
+    printReceiptBtn.classList.add('hidden');
+    addAnotherBetBtn.classList.remove('hidden');
+
+  } catch (err) {
+    console.error('🖨️ Print failed:', err);
+    alert('Print failed: ' + (err.message || String(err)));
+  } finally {
+    printReceiptBtn.innerHTML = `
+      <i data-lucide="printer"></i>
+      <span>Print Receipt</span>
+    `;
+    lucide.createIcons();
+    printReceiptBtn.disabled = false;
+  }
+});
+
+
+
+
+
+
+    
+    
+    
+    
     // Game Type Selection
     gameTypeInputs.forEach(btn => {
       btn.addEventListener('click', () => {

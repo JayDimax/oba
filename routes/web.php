@@ -181,25 +181,9 @@ Route::middleware(['auth', 'role:agent'])->prefix('agent')->name('agent.')->grou
     Route::get('/receipts/{stub}', [BetController::class, 'showReceipt'])->name('receipts.show');
     Route::get('/remit-preview', [AgentController::class, 'remitPreview'])->name('remit-preview');
     Route::get('/receipts/multi/{stub_ids}', [AgentController::class, 'multi'])->name('receipts.multi');
-    
-    Route::post('/receipts-json-multi', [BetController::class, 'showReceiptsJsonMulti'])->name('receipts.json.multi');
-    Route::get('/multi-receipts', [BetController::class, 'showMultiReceipts'])->name('multi.receipts');
-
-    Route::get('/receipts-json/{stub}', [BetController::class, 'getReceiptJson'])->name('receipts.json');
-
-
-
-
-
-
-
-
-
-
-
-
+    Route::get('/receipts-json/{stub}', [BetController::class, 'showReceiptJson'])->name('receipts.json');
     Route::post('/check-hot-pick', [BetController::class, 'checkHotPick']);
-    
+ 
     Route::get('/agent/printer-mac', function (Request $request) {
     $agent = $request->user();
     return response()->json([
@@ -207,7 +191,8 @@ Route::middleware(['auth', 'role:agent'])->prefix('agent')->name('agent.')->grou
         'agentName' => $agent->name ?? 'Agent',
     ]);
     })->name('agent.printerMac');
-
+    Route::get('/json-multi', [BetController::class, 'jsonMulti'])->name('receipts.jsonMulti');
+    Route::get('/receipts/print-multi/{stubIds}', [BetController::class, 'printMulti'])->name('receipts.print-multi');
 });
 
 // Utility Endpoint

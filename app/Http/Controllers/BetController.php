@@ -8,6 +8,7 @@ use App\Models\Agent;
 use App\Models\AgentBlock;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use App\Models\CollectionStub;
 use App\Services\HotPickChecker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -95,8 +96,6 @@ public function store(Request $request)
     }
 }
 
-
-
 public function checkHotPick(Request $request)
 {
     $request->validate([
@@ -114,40 +113,6 @@ public function checkHotPick(Request $request)
     return response()->json(['locked' => $isHotPick]);
 }
 
-
-
-// public function showReceipt($stub)
-// {
-//     $agentId = auth()->id();
-
-//     // Fetch bets for the stub and agent
-//     $bets = Bet::where('stub_id', $stub)
-//         ->where('agent_id', $agentId)
-//         ->get();
-
-//     // Handle missing receipt
-//     if ($bets->isEmpty()) {
-//         abort(404, 'Receipt not found.');
-//     }
-
-//     // Extract data from first bet
-//     $firstBet = $bets->first();
-//     $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
-//     $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
-//     $printedTime = now()->format('Y-m-d h:i A');
-//     $totalAmount = $bets->sum('amount');
-
-//     // Generate QR Code as SVG
-//     $qrCodeSvg = QrCode::format('svg')
-//         ->size(72)
-//         ->generate("Stub-{$stub}");
-
-//     // Return receipt view
-//     return view('agent.prints.agent-receipt', compact(
-//         'bets', 'totalAmount', 'stub', 'drawDate', 'printedTime', 'qrCodeSvg', 'agentName'
-//     ));
-// }
-
 public function showReceipt($stub)
 {
     $agentId = auth()->id();
@@ -157,35 +122,28 @@ public function showReceipt($stub)
         ->where('agent_id', $agentId)
         ->get();
 
+    // Handle missing receipt
     if ($bets->isEmpty()) {
-        return response()->json(['error' => 'Receipt not found.'], 404);
+        abort(404, 'Receipt not found.');
     }
 
+    // Extract data from first bet
     $firstBet = $bets->first();
     $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
     $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
     $printedTime = now()->format('Y-m-d h:i A');
     $totalAmount = $bets->sum('amount');
 
-    $betArray = $bets->map(function ($bet) {
-        return [
-            'draw' => $bet->draw ?? '',
-            'game' => $bet->game ?? '',
-            'combi' => $bet->combi ?? '',
-            'amount' => $bet->amount ?? 0
-        ];
-    });
+    // Generate QR Code as SVG
+    $qrCodeSvg = QrCode::format('svg')
+        ->size(72)
+        ->generate("Stub-{$stub}");
 
-    return response()->json([
-        'agentName' => $agentName,
-        'drawDate' => $drawDate,
-        'stub' => $stub,
-        'bets' => $betArray,
-        'totalAmount' => $totalAmount,
-        'printedTime' => $printedTime
-    ]);
+    // Return receipt view
+    return view('agent.prints.agent-receipt', compact(
+        'bets', 'totalAmount', 'stub', 'drawDate', 'printedTime', 'qrCodeSvg', 'agentName'
+    ));
 }
-
 
 public function showReceiptJson($stub)
 {
@@ -202,51 +160,140 @@ public function showReceiptJson($stub)
     $firstBet = $bets->first();
     $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
     $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
-    $printedTime = now()->format('Y-m-d h:i A');
+    $printedTime = now()->format('Y-m-d H:i A');
     $totalAmount = $bets->sum('amount');
 
     $betArray = $bets->map(function ($bet) {
         return [
-            'draw' => $bet->draw ?? '',
-            'game' => $bet->game ?? '',
-            'combi' => $bet->combi ?? '',
-            'amount' => $bet->amount ?? 0
+            'game_type'  => $bet->game_type,
+            'draw_time'  => $bet->game_draw,
+            'numbers'    => $bet->bet_number,
+            'amount'     => (float) $bet->amount,
         ];
     });
 
     return response()->json([
-        'agentName' => $agentName,
-        'drawDate' => $drawDate,
-        'stub' => $stub,
-        'bets' => $betArray,
-        'totalAmount' => $totalAmount,
-        'printedTime' => $printedTime
-    ]);
+        'stub_id'      => $stub,
+        'agentName'    => $agentName,
+        'drawDate'     => $drawDate,
+        'bets'         => $betArray,
+        'totalAmount'  => (float) $totalAmount,
+        'printedTime'  => $printedTime,
+    ], 200, [], JSON_PRETTY_PRINT);
 }
-public function showMultiReceipts()
+
+public function showReceiptsJsonMulti(Request $request)
 {
+    $stubs = $request->input('stubs', []); // array of stub IDs
     $agentId = auth()->id();
 
-    // Fetch all bets for the agent, ordered by stub descending
-    $bets = Bet::where('agent_id', $agentId)
-               ->orderBy('stub', 'desc')
-               ->get();
+    $receipts = [];
 
-    // Group bets by stub
-    $receipts = $bets->groupBy('stub')->map(function ($group, $stub) {
-        $firstBet = $group->first();
+    foreach ($stubs as $stub) {
+        $bets = Bet::where('stub_id', $stub)
+            ->where('agent_id', $agentId)
+            ->get();
 
-        return (object)[
-            'stub' => $stub,
-            'agentName' => optional($firstBet->betAgent)->name ?? 'Unknown Agent',
-            'totalAmount' => $group->sum('amount')
+        if ($bets->isEmpty()) continue;
+
+        $firstBet = $bets->first();
+        $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
+        $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
+        $printedTime = now()->format('Y-m-d H:i A');
+        $totalAmount = $bets->sum('amount');
+
+        $betArray = $bets->map(function ($bet) {
+            return [
+                'game_type'  => $bet->game_type,
+                'draw_time'  => $bet->game_draw,
+                'numbers'    => $bet->bet_number,
+                'amount'     => (float) $bet->amount,
+            ];
+        });
+
+        $receipts[] = [
+            'stub_id'     => $stub,
+            'agentName'   => $agentName,
+            'drawDate'    => $drawDate,
+            'bets'        => $betArray,
+            'totalAmount' => (float) $totalAmount,
+            'printedTime' => $printedTime,
         ];
-    })->values(); // re-index array for Blade
+    }
 
-    return view('agent.prints.multi', compact('receipts'));
+    return response()->json($receipts, 200, [], JSON_PRETTY_PRINT);
 }
 
+public function jsonMulti(Request $request)
+{
+    // Expect multiple stub_ids from frontend like ?stub_ids=123,456,789
+    $stubIds = explode(',', $request->query('stub_ids'));
 
+    Log::info("📥 jsonMulti called", ['stub_ids' => $stubIds]);
+
+    $stubs = Bet::whereIn('stub_id', $stubIds)->get();
+
+    if ($stubs->isEmpty()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No stubs found for given IDs',
+        ], 404);
+    }
+
+    // Group by stub_id for receipt
+    $grouped = $stubs->groupBy('stub_id')->map(function ($items) {
+        return [
+            'agent_code' => $items->first()->agent_code ?? null,
+            'draw_time'  => $items->first()->game_draw ?? null,
+            'bets' => $items->map(function ($bet) {
+                return [
+                    'game'   => $bet->game_type,
+                    'number' => $bet->number,
+                    'amount' => $bet->amount,
+                ];
+            })->values(),
+        ];
+    });
+
+    return response()->json([
+        'success' => true,
+        'stubs'   => $grouped,
+    ]);
+}
+    
+public function printMulti($stubIds)
+{
+    Log::info("📥 printMulti called", ['stub_ids' => $stubIds]);
+
+    // Convert comma-separated IDs to array
+    $ids = explode(',', $stubIds);
+
+    Log::info("🔍 Searching stubs", ['ids' => $ids]);
+
+    // Fetch bets with agent name
+    $bets = Bet::select('bets.*', 'agents.name as agent_name')
+        ->join('agents', 'agents.id', '=', 'bets.agent_id')
+        ->whereIn('bets.stub_id', $ids)
+        ->orderBy('bets.stub_id')
+        ->get();
+
+        dd($bets);
+
+    if ($bets->isEmpty()) {
+        Log::warning("⚠️ No bets found for given stubs", ['ids' => $ids]);
+        return response()->json(['error' => 'No bets found'], 404);
+    }
+
+    // Group by stub_id
+    $grouped = $bets->groupBy('stub_id');
+
+    Log::info("🧾 Grouped bets", ['count' => $grouped->count()]);
+
+    return response()->json([
+        'status' => 'success',
+        'stubs'  => $grouped
+    ]);
+}
 
 public function preview(Request $request)
 {
@@ -278,57 +325,12 @@ public function preview(Request $request)
         return back()->withErrors(['preview' => 'Something went wrong.']);
     }
 }
+
 protected function isAgentBlockedForDraw($agentId, $drawLabel)
 {
     return AgentBlock::where('agent_id', $agentId)
         ->where('blocked_draw', $drawLabel)
         ->exists();
 }
-
-public function showReceiptsJsonMulti(Request $request)
-{
-    $stubs = $request->input('stubs', []); // array of stub IDs
-    $agentId = auth()->id();
-
-    $receipts = [];
-
-    foreach ($stubs as $stub) {
-        $bets = Bet::where('stub_id', $stub)
-            ->where('agent_id', $agentId)
-            ->get();
-
-        if ($bets->isEmpty()) continue;
-
-        $firstBet = $bets->first();
-        $agentName = optional($firstBet->betAgent)->name ?? 'Unknown Agent';
-        $drawDate = $firstBet->game_date ?? now()->format('Y-m-d');
-        $printedTime = now()->format('Y-m-d h:i A');
-        $totalAmount = $bets->sum('amount');
-
-        $betArray = $bets->map(function ($bet) {
-            return [
-                'draw' => $bet->draw ?? '',
-                'game' => $bet->game ?? '',
-                'combi' => $bet->combi ?? '',
-                'amount' => $bet->amount ?? 0
-            ];
-        });
-
-        $receipts[] = [
-            'agentName' => $agentName,
-            'drawDate' => $drawDate,
-            'stub' => $stub,
-            'bets' => $betArray,
-            'totalAmount' => $totalAmount,
-            'printedTime' => $printedTime
-        ];
-    }
-
-    return response()->json($receipts);
-}
-
-
-
-
 
 }
